@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Ragdoll Arena 3D – Corps humain réaliste</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#eee;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#gl{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+#hud{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:3}
+.btn{position:fixed;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;color:#fff;z-index:5;touch-action:none;width:50px;height:50px;font-size:20px}
+.btn.on{background:rgba(255,255,255,.34)}
+.btn small{position:absolute;bottom:-3px;right:-3px;background:#c22;border-radius:9px;font-size:10px;padding:1px 5px}
+#fire{right:22px;bottom:26px;width:86px;height:86px;font-size:34px;background:rgba(200,30,30,.35)}
+#jump{right:124px;bottom:18px;width:56px;height:56px;font-size:22px}
+#reload{right:22px;bottom:126px}
+#medBtn{right:84px;bottom:130px}
+#inspBtn{right:146px;bottom:130px}
+#setBtn{right:130px;top:8px;width:38px;height:38px;font-size:18px}
+#catBtn{right:172px;top:8px;width:38px;height:38px;font-size:18px}
+#cat .mitem{cursor:pointer}#cat .mitem:active{background:#33281c}
+#tgtBtn{position:fixed;right:6px;top:72px;width:116px;height:132px;z-index:5;border-radius:8px;background:transparent;border:2px solid rgba(255,200,60,.55);display:flex;align-items:flex-end;justify-content:center;color:#fc3;font-size:11px;font-weight:700;padding-bottom:4px;box-sizing:border-box;touch-action:none}
+#tgtBtn.on{background:rgba(255,200,60,.15)}
+#weapons{position:fixed;top:6px;left:168px;right:216px;display:flex;gap:2px;flex-wrap:nowrap;justify-content:safe center;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;z-index:5;touch-action:pan-x}
+#weapons::-webkit-scrollbar{display:none}
+.w{padding:2px 1px;border-radius:6px;background:rgba(0,0,0,.55);border:1px solid #555;font-size:8px;text-align:center;min-width:32px;line-height:1.1;flex:0 0 auto;white-space:nowrap}
+.w b{display:block;font-size:15px}
+.w.sel{border-color:#fc3;background:rgba(90,65,0,.7)}
+.w.lock{opacity:.45}
+#joyBase{position:fixed;width:110px;height:110px;border-radius:50%;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.07);display:none;z-index:4;pointer-events:none}
+#joyKnob{position:absolute;left:30px;top:30px;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.35)}
+#msg{position:fixed;top:26%;left:50%;transform:translateX(-50%);font-size:22px;font-weight:800;text-shadow:0 2px 6px #000;pointer-events:none;text-align:center;z-index:4;transition:opacity .4s}
+#overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.86);text-align:center;padding:18px;z-index:30;overflow:auto}
+#overlay h1{margin:0 0 6px;font-size:30px;letter-spacing:2px;color:#e33;text-shadow:0 3px 0 #500}
+#overlay p,#overlay li{max-width:640px;margin:4px auto;font-size:13px;color:#ccc;line-height:1.4}
+#overlay ul{text-align:left;padding-left:18px;max-width:620px;margin:6px auto}
+.bt{margin:8px 5px 0;font-size:17px;padding:10px 26px;border-radius:10px;border:0;background:#c22;color:#fff;font-weight:700}
+.bt.alt{background:#444}
+.panel{position:fixed;inset:6px;background:rgba(12,14,18,.96);border:1px solid #333;border-radius:12px;z-index:20;display:flex;flex-direction:column;font-size:12px;overflow:hidden}
+.panel.hidden,.hidden{display:none!important}
+#med{z-index:22}
+.phead{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid #2a2a2a;background:#161a20;flex-wrap:wrap}
+.phead b{font-size:14px}.phead .sp{flex:1}
+.panel button{background:#2a2f38;color:#eee;border:1px solid #444;border-radius:7px;padding:5px 9px;font-size:12px}
+.panel button.on{background:#7a5a00;border-color:#fc3}
+.panel button.x{background:#5a1f1f;font-weight:700}
+.panel button.primary{background:#b02020}
+.ibody{flex:1;display:flex;min-height:0}
+.ileft{width:40%;display:flex;flex-direction:column;border-right:1px solid #2a2a2a;min-height:0}
+.iright{flex:1;display:flex;flex-direction:column;min-height:0}
+.seg{display:flex;gap:4px;padding:5px;flex-wrap:wrap}
+.cwrap{flex:1;min-height:0;position:relative}
+#iCan{position:absolute;inset:0;width:100%;height:100%}
+#iTip{padding:4px 8px;min-height:30px;font-size:11px;color:#ddd;border-top:1px solid #2a2a2a}
+#iVitals{display:flex;flex-wrap:wrap;gap:4px 10px;padding:5px 8px;font-size:12px;border-bottom:1px solid #2a2a2a}
+#iVitals span b{color:#fff}
+#iList{flex:1;overflow-y:auto;padding:4px 8px;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+#iList details{margin:3px 0;background:#1a1e25;border-radius:6px;padding:3px 6px}
+#iList summary{font-weight:600;cursor:pointer}
+.row{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dotted #2a2a2a}
+.row span:last-child{text-align:right}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.bbar{position:relative;height:16px;background:#2a0d0d;border-radius:5px;margin:6px 0 2px;overflow:hidden}
+.bbar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#7a0000,#d11)}
+.bbar b{position:absolute;top:0;bottom:0;width:1px;background:#fff8}
+.bscale{position:relative;height:12px;font-size:9px;color:#aaa}.bscale span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.big{font-size:15px;font-weight:700}
+#iAct{padding:5px 8px;border-top:1px solid #2a2a2a;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;padding:8px;overflow-y:auto;flex:1;touch-action:pan-y}
+.mitem{background:#1c2129;border:1px solid #333;border-radius:9px;padding:7px;display:flex;flex-direction:column;gap:3px}
+.mitem b{font-size:13px}.mitem i{font-style:normal;color:#aaa;font-size:11px}
+#medMsg{padding:6px 10px;min-height:20px;color:#ffd27a;border-top:1px solid #2a2a2a}
+.sbody{flex:1;overflow-y:auto;padding:8px 12px;touch-action:pan-y}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #222}
+.srow label{flex:1}.srow small{display:block;color:#999}
+.srow select,.srow input[type=range]{max-width:52%}
+.sfoot{display:flex;gap:8px;padding:8px;border-top:1px solid #2a2a2a;justify-content:flex-end}
+input[type=checkbox]{width:22px;height:22px}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="hud"></canvas>
+<div id="weapons"></div>
+<div id="joyBase"><div id="joyKnob"></div></div>
+<div class="btn" id="fire">🎯</div>
+<div class="btn" id="jump">▲</div>
+<div class="btn" id="reload">🔄</div>
+<div class="btn" id="medBtn">🎒</div>
+<div class="btn" id="inspBtn">🩺</div>
+<div class="btn" id="setBtn">⚙️</div>
+<div class="btn" id="catBtn">☄️</div>
+<div id="tgtBtn" class="hidden">🔍 Voir ses dégâts</div>
+<div id="msg"></div>
+
+<div id="med" class="panel hidden">
+  <div class="phead"><b>🎒 Soins</b><span id="medTarget"></span><span class="sp"></span><button class="x" data-close="med">✕</button></div>
+  <div id="medList" class="mgrid"></div>
+  <div id="medMsg"></div>
+</div>
+
+<div id="cat" class="panel hidden">
+  <div class="phead"><b>☄️ Catastrophes &amp; outils</b><span style="color:#aaa">Déclenché là où vous visez (croix au centre)</span><span class="sp"></span><button class="x" data-close="cat">✕</button></div>
+  <div id="catList" class="mgrid"></div>
+</div>
+
+<div id="insp" class="panel hidden">
+  <div class="phead"><b id="iName"></b><span id="iState"></span><span class="sp"></span><button id="iSelf">Moi</button><button id="iMed">🎒 Soigner</button><button class="x" data-close="insp">✕</button></div>
+  <div class="ibody">
+    <div class="ileft">
+      <div class="seg" id="iViews"><button data-v="skel" class="on">🦴 Os</button><button data-v="org">🫀 Organes</button><button data-v="mus">💪 Muscles</button><button data-v="skin">🩸 Peau</button><button id="iZin">🔍＋</button><button id="iZout">🔍－</button></div>
+      <div class="cwrap"><canvas id="iCan"></canvas></div>
+      <div id="iTip">Touche une partie du corps pour voir son état.</div>
+    </div>
+    <div class="iright">
+      <div id="iVitals"></div>
+      <div class="seg" id="iTabs"><button data-t="sum" class="on">Résumé</button><button data-t="bones">Os (206)</button><button data-t="orgs">Organes</button><button data-t="mus">Muscles</button><button data-t="blood">🩸 Sang</button><button data-t="wounds">Plaies</button></div>
+      <div id="iList"></div>
+    </div>
+  </div>
+</div>
+
+<div id="settings" class="panel hidden">
+  <div class="phead"><b>⚙️ Paramètres</b><span class="sp"></span><button class="x" data-close="settings">✕</button></div>
+  <div id="setBody" class="sbody"></div>
+  <div class="sfoot"><button id="setResume">Appliquer</button><button id="setApply" class="primary">Appliquer et recommencer</button></div>
+</div>
+
+<div id="overlay">
+  <h1>RAGDOLL ARENA 3D</h1>
+  <p>Simulation du corps humain : <b>206 os</b>, organes, artères, nerfs, <b>57 muscles</b>, sang, douleur, conscience, température.</p>
+  <ul>
+    <li>Les balles traversent vraiment le corps : elles cassent les os, coupent les artères, perforent poumons, cœur, foie…</li>
+    <li>Batte à la tête = commotion, étourdissement, K.O. Balle dans la jambe = tu boites ou tu ne marches plus.</li>
+    <li>Hémorragie, pneumothorax, brûlures, froid, hypothermie, noyade, chutes… et les soins pour survivre.</li>
+    <li>Touche un personnage (ou 🩺) pour voir ses os, ses organes et ses muscles.</li>
+  </ul>
+  <p><b>Gauche</b> : joystick · <b>Droite</b> : caméra · 🎯 frapper/tirer · ▲ sauter · 🔄 recharger · 🎒 soins · 🩺 examiner · ⚙️ paramètres (PvP, ville, météo…)</p>
+  <p>PC : ZQSD/WASD, souris, clic gauche tirer, Espace sauter, R recharger, E soins, I examiner, 1-0 armes</p>
+  <p style="color:#fc3">📱 Mets ton téléphone à l'horizontale</p>
+  <p id="loadMsg" style="color:#8cf">Chargement du moteur 3D…</p>
+  <div><button class="bt hidden" id="start">JOUER</button><button class="bt alt hidden" id="startSet">⚙️ Paramètres</button></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>if(typeof THREE==='undefined'){document.getElementById('loadMsg').textContent='Impossible de charger le moteur 3D (vérifie ta connexion).';}</script>
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/body.js"></script>
+<script src="js/medical.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/events.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
