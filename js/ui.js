@@ -464,6 +464,7 @@ function step(dt){
   for(const e of chars)if(e!==player)aiTick(e,dt);
   for(const c of chars){physics(c);control(c,dt);attackLogic(c,dt);burnTick(c,dt);}
   separate();updProjectiles(dt);updFires(dt);updEvents(dt);
+  for(const c of chars)if(c.skin)animStep(c,dt);
   physAcc+=dt;if(physAcc>=0.05){for(const c of chars){physiology(c,physAcc);speakTick(c);}physAcc=0;}
   progT-=dt;if(progT<=0){progT=0.5;for(const c of chars){c._prog=prognosis(c);c._ps=survival(c).ps;c._ps0=noCare(c,c._prog,c._ps);}}
   updParticles(dt);updSprites(dt);updLines(dt);

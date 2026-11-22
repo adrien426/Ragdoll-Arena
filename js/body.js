@@ -196,6 +196,8 @@ function control(c,dt){
   const conscious=c.alive&&c.conscious&&!c.arrest;
   if(!conscious||c.stun>0||c.tetra){c.upT=0;if(conscious&&c.tetra)c.crawling=false;return;}
   const f={x:Math.sin(c.yaw),y:0,z:Math.cos(c.yaw)},R={x:-Math.cos(c.yaw),y:0,z:Math.sin(c.yaw)};
+  // kinematic character controller (animated body) : move the capsule, the arms still aim physically
+  if(c.k&&c.k.mode==='ctrl'){if(c.input.attack)c._aimT=GT+0.8;ctrlMove(c,dt);c.crawling=false;armControl(c,f,R,1,!c.k.grounded);return;}
   const gh=groundAt(pel.x,pel.z,pel.y-0.45);
   const wl=waterLevel(pel.x,pel.z);
   const footY=Math.min(P[c.legs[0].ft].y,P[c.legs[1].ft].y)-gh;

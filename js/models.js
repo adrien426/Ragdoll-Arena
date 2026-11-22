@@ -108,56 +108,119 @@ function attachSkin(c){
 }
 function detachSkin(c){if(c.skin){scene.remove(c.skin.root);for(const e of c.skin.meshes)e.m.geometry.dispose();c.skin=null;}}
 
-// ---------- animation layer ----------
-// Upright and in control : real motion-captured clips (idle / walk / run). Hit, stunned, unconscious,
-// falling, swimming or dead : the physical ragdoll drives every bone. Switching blends over 0.3 s.
-const ANIM_BLEND=0.3,ARM_BONES=['RightArm','RightForeArm','RightHand','LeftArm','LeftForeArm','LeftHand'];
+// ---------- character controller + animation ----------
+// Standing characters are KINEMATIC (like a game character controller): a capsule moved by the input,
+// sliding along walls, snapping to steps, playing motion-captured clips. The ragdoll points are then
+// placed on the animated skeleton (hitboxes = what you see). When hit hard, stunned, unconscious,
+// falling, swimming or dead, the controller lets go and the physical ragdoll takes over with the same
+// velocity. Getting up blends from the ragdoll pose back to the clip.
+const ANIM_BLEND=0.3,GETUP_T=0.75,ARM_BONES=['RightArm','RightForeArm','RightHand','LeftArm','LeftForeArm','LeftHand'];
+const K_RAD=0.3,K_STEP=0.45,K_H=1.75,WALK_V=1.5,RUN_V=3.4;
 const _yawQ=new THREE.Quaternion(),_Y=new THREE.Vector3(0,1,0);
-function wantAnim(c){
-  if(!c.skin||!c.skin.mixer||!c.alive||!c.conscious||c.arrest||!c.canStand||c.tasedT>0||c.crawling||c.inWater||c.tetra)return false;
-  if(c.stun>0.25||c.koT>0||c.upT<0.85)return false;
-  const P=c.P,pel=P[c.pelvis];const gy=c.gndY!==undefined?c.gndY:groundAt(pel.x,pel.z,pel.y);
-  if(pel.y-gy<0.7)return false;                 // body is not upright any more
-  const up=sub(P[c.neck],pel);if(up.y/vlen(up)<0.8)return false; // leaning too far
-  if(!c.onGround&&c.airT<=0&&GT-(c._groundT||0)>0.45)return false; // a real fall, not a step
+function hasCtrl(c){return!!(c.skin&&c.skin.mixer);}
+function ctrlWanted(c){
+  if(!c.alive||!c.conscious||c.arrest||!c.canStand||c.tasedT>0||c.tetra||c.para)return false;
+  if(c.stun>0.25||c.koT>0||c.faintT>0)return false;
+  const k=c.k;if(k){const wl=waterLevel(k.x,k.z),g=groundAt(k.x,k.z,k.y+K_STEP);if(wl>g+1.2)return false;}  // deep water : swim as a ragdoll
   return true;
 }
-function setClip(S,name,ts){const a=S.actions[name];if(!a)return;a.timeScale=ts;if(S.cur===name)return;
-  const prev=S.cur&&S.actions[S.cur];a.reset();a.time=Math.random()*a.getClip().duration;a.setEffectiveWeight(1).fadeIn(0.25).play();if(prev)prev.fadeOut(0.25);S.cur=name;}
-function snapshot(S){const M=S.M;for(const n of M.order){const b=S.bones[n];if(!b)continue;(S.snap[n]||(S.snap[n]=new THREE.Quaternion())).copy(b.quaternion);}S.snapHips.copy(S.bones.Hips.position);}
-
-// pose every bone, from the clips and/or the ragdoll points
-function poseSkin(c){
-  const S=c.skin,M=S.M,P=c.P,B=S.bones;const dt=clamp(GT-(S.lastGT!==undefined?S.lastGT:GT),0,0.1);S.lastGT=GT;
-  const pel=P[c.pelvis];S.root.position.set(0,0,0);S.root.quaternion.identity();
-  if(c.onGround)c._groundT=GT;
-  const anim=wantAnim(c);
-  if(anim!==S.anim){snapshot(S);S.anim=anim;S.blendT=0;}
-  S.blendT=(S.blendT||0)+dt;
-  const w=WEAPONS[c.weapon];
-  // arms follow the ragdoll (aim, guard, punches) while the legs and body play the clip
-  const armsFromRagdoll=anim&&c.hasWeapon&&(w.len>0||c.swing>=0);
-  if(anim){
-    const sp=Math.hypot(pel.x-pel.ox,pel.z-pel.oz)*60;S.spd+=(sp-S.spd)*clamp(dt*6,0,1);const v=S.spd,lim=Math.min(c.legFn[0],c.legFn[1]);
-    if(v<0.3)setClip(S,S.actions.idleN?'idleN':'idle',1);else if(v<3.4||lim<0.6)setClip(S,'walk',clamp(v/1.45,0.5,2.2)*(lim<0.6?0.8:1));else setClip(S,'run',clamp(v/6.4,0.7,1.5));
-    S.mixer.update(dt);
-    // the clip is authored in place : put it on the body, facing its heading
-    const yaw=Math.atan2(c.P[c.chestF].x-c.P[c.chest].x,c.P[c.chestF].z-c.P[c.chest].z);S.yaw=isFinite(yaw)?yaw:c.yaw;
-    _yawQ.setFromAxisAngle(_Y,S.yaw);const h=B.Hips;h.quaternion.premultiply(_yawQ);
-    const gy=c.gndY!==undefined?c.gndY:groundAt(pel.x,pel.z,pel.y);_mv.copy(h.position).applyQuaternion(_yawQ);
-    h.position.set(pel.x/M.scale+_mv.x,gy/M.scale+_mv.y,pel.z/M.scale+_mv.z);
-    // limping : a little roll toward the bad leg
-    if(lim<0.6&&v>0.3){const sideK=c.legFn[0]<c.legFn[1]?1:-1;_mq.setFromAxisAngle(_mv.set(Math.sin(S.yaw),0,Math.cos(S.yaw)),Math.sin(GT*7)*0.06*sideK);h.quaternion.premultiply(_mq);}
-  }
-  const drive=anim?(armsFromRagdoll?ARM_BONES:null):'all';
-  if(drive)driveFromRagdoll(c,drive,anim);
-  // blend out of the previous mode
-  if(S.blendT<ANIM_BLEND){const k=S.blendT/ANIM_BLEND,e=k*k*(3-2*k);for(const n of M.order){const b=B[n],q=S.snap[n];if(b&&q)b.quaternion.copy(_mq2.copy(q).slerp(b.quaternion,e));}
-    B.Hips.position.lerpVectors(S.snapHips,B.Hips.position.clone(),e);}
-  S.root.updateMatrixWorld(true);
+function initCtrl(c){const pel=c.P[c.pelvis];c.k={x:pel.x,y:groundAt(pel.x,pel.z,pel.y),z:pel.z,vx:0,vy:0,vz:0,yaw:c.yaw,grounded:true,mode:'rag',getup:0,airT:0};}
+function enterCtrl(c){const k=c.k,pel=c.P[c.pelvis];k.x=pel.x;k.z=pel.z;k.y=groundAt(pel.x,pel.z,pel.y+0.5);k.vx=k.vy=k.vz=0;k.mode='ctrl';k.getup=GETUP_T;k.grounded=true;
+  const S=c.skin;snapshot(S);S.blendT=0;S.blendLen=GETUP_T;c.upT=1;}
+function enterRag(c){const k=c.k;k.mode='rag';const S=c.skin;snapshot(S);S.blendT=0;S.blendLen=0.18;}
+// horizontal circle vs box push-out (slide along walls), ground snap with step-up / step-down
+function ctrlMove(c,dt){
+  const k=c.k,inp=c.input;
+  const lim=Math.min(c.legFn[0],c.legFn[1]);
+  let max=RUN_V*clamp(c.speedF,0.15,1)*c.speedMul;if(lim<0.6)max=Math.min(max,WALK_V*0.8);
+  if(k.getup>0){k.getup-=dt;max=0;}
+  let mx=inp.mx||0,mz=inp.mz||0;const ml=Math.hypot(mx,mz);if(ml>1){mx/=ml;mz/=ml;}
+  const tx=mx*max,tz=mz*max,acc=k.grounded?12:2;
+  k.vx+=(tx-k.vx)*clamp(dt*acc,0,1);k.vz+=(tz-k.vz)*clamp(dt*acc,0,1);
+  if(k.grounded&&inp.jump&&c.jumpCd<=0&&lim>0.7&&c.painEff<60&&k.getup<=0){k.vy=4.3;k.grounded=false;c.jumpCd=0.8;c.airT=0.4;}
+  k.vy-=9.8*dt;
+  let nx=k.x+k.vx*dt,nz=k.z+k.vz*dt,ny=k.y+k.vy*dt;
+  // walls : boxes overlapping the capsule between knee (step) height and the head
+  for(let pass=0;pass<2;pass++)for(const b of boxesNear(nx,nz,K_RAD+1)){
+    if(b.max.y<=ny+K_STEP||b.min.y>=ny+K_H)continue;
+    const cx=clamp(nx,b.min.x,b.max.x),cz=clamp(nz,b.min.z,b.max.z);let dx=nx-cx,dz=nz-cz;const d=Math.hypot(dx,dz);
+    if(d>=K_RAD)continue;
+    if(d<1e-6){const o=[nx-b.min.x,b.max.x-nx,nz-b.min.z,b.max.z-nz];const m=Math.min(...o);const i=o.indexOf(m);dx=i===0?-1:i===1?1:0;dz=i===2?-1:i===3?1:0;nx+=dx*(m+K_RAD);nz+=dz*(m+K_RAD);}
+    else{dx/=d;dz/=d;nx+=dx*(K_RAD-d);nz+=dz*(K_RAD-d);}
+    const vn=k.vx*dx+k.vz*dz;if(vn<0){k.vx-=vn*dx;k.vz-=vn*dz;}}
+  // terrain cliffs : do not walk off into the void sideways, only fall when moving off a ledge on purpose
+  const g=groundAt(nx,nz,ny+K_STEP);
+  if(ny<=g+0.02&&k.vy<=0){ny=g;k.vy=0;k.grounded=true;}
+  else if(k.grounded&&k.vy<=0&&ny-g<0.35){ny=g;k.vy=0;}
+  else k.grounded=false;
+  // other characters : keep a body width apart
+  for(const o of chars){if(o===c)continue;const q=o.k&&o.k.mode==='ctrl'?o.k:o.P[o.pelvis];const dx=nx-q.x,dz=nz-q.z,d=Math.hypot(dx,dz);if(d<0.55&&d>1e-4&&Math.abs((q.y||0)-ny)<1.6){const m=(0.55-d)*0.5/d;nx+=dx*m;nz+=dz*m;}}
+  k.vx=(nx-k.x)/dt;k.vz=(nz-k.z)/dt;k.x=nx;k.y=ny;k.z=nz;
+  if(!k.grounded)k.airT+=dt;else k.airT=0;
+  // heading : face where you go, or where you aim while attacking
+  const sp=Math.hypot(k.vx,k.vz);const attacking=c.swing>=0||(c.isPlayer&&c._aimT>GT)||(c.team===1&&c.ai&&c.ai.los);
+  let want=k.yaw;if(attacking||sp<0.3)want=c.yaw;else want=Math.atan2(k.vx,k.vz);
+  let dy=want-k.yaw;while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;k.yaw+=dy*clamp(dt*10,0,1);
+  if(!c.isPlayer&&!attacking)c.yaw=k.yaw;
+  // footsteps
+  c.stepT-=sp*dt;if(c.stepT<0&&k.grounded&&sp>0.6){c.stepT=0.75;sfxAt(c.P[c.pelvis]);SFX.step();}
+  c.onGround=k.grounded;c.gndY=g;
 }
+function setClip(S,name,ts){const a=S.actions[name];if(!a)return;a.timeScale=ts;if(S.cur===name)return;
+  const prev=S.cur&&S.actions[S.cur];a.reset();a.time=Math.random()*a.getClip().duration;a.setEffectiveWeight(1).fadeIn(0.22).play();if(prev)prev.fadeOut(0.22);S.cur=name;}
+function snapshot(S){const M=S.M;for(const n of M.order){const b=S.bones[n];if(!b)continue;(S.snap[n]||(S.snap[n]=new THREE.Quaternion())).copy(b.quaternion);}S.snapHips.copy(S.bones.Hips.position);}
+// ragdoll point <- bone (world positions of the animated skeleton)
+const PT_FROM_BONE=[['head','Head','HeadTop_End',0.45],['neck','Neck',null,0],['chest','Spine1','Spine2',0.6],['pelvis','Hips',null,0]];
+function bonePos(S,n){const b=S.bones[n];if(!b)return null;b.getWorldPosition(_mv);return{x:_mv.x,y:_mv.y,z:_mv.z};}
+function pointsFromSkeleton(c,dt,armsToo){
+  const S=c.skin,P=c.P,k=c.k;const vx=k.vx*dt,vy=Math.min(0,k.vy)*dt,vz=k.vz*dt;
+  const set=(i,q)=>{if(!q)return;const p=P[i];p.x=q.x;p.y=q.y;p.z=q.z;p.ox=q.x-vx;p.oy=q.y-vy;p.oz=q.z-vz;};
+  const mid=(a,b,t)=>{const A=bonePos(S,a),B=b?bonePos(S,b):null;return A&&B?lerp3(A,B,t):A;};
+  set(c.head,mid('Head','HeadTop_End',0.45));set(c.neck,bonePos(S,'Neck'));set(c.chest,mid('Spine1','Spine2',0.6));set(c.pelvis,bonePos(S,'Hips'));
+  const fw={x:Math.sin(k.yaw),y:0,z:Math.cos(k.yaw)};const ch=P[c.chest];set(c.chestF,{x:ch.x+fw.x*0.11,y:ch.y+0.02,z:ch.z+fw.z*0.11});
+  const SD=['Right','Left'];
+  for(let s=0;s<2;s++){const n=SD[s],L=c.legs[s],A=c.arms[s];
+    set(L.hip,bonePos(S,n+'UpLeg'));set(L.tm,mid(n+'UpLeg',n+'Leg',0.5));set(L.kn,bonePos(S,n+'Leg'));set(L.sm,mid(n+'Leg',n+'Foot',0.5));
+    const ft=bonePos(S,n+'Foot');if(ft){ft.y-=0.03;set(L.ft,ft);}const toe=bonePos(S,n+'ToeBase');if(toe){toe.y=Math.max(toe.y-0.02,(ft?ft.y:toe.y)-0.04);set(L.toe,toe);}
+    set(A.sh,bonePos(S,n+'Arm'));
+    if(armsToo){set(A.um,mid(n+'Arm',n+'ForeArm',0.5));set(A.el,bonePos(S,n+'ForeArm'));set(A.fm,mid(n+'ForeArm',n+'Hand',0.5));set(A.ha,mid(n+'Hand',n+'HandMiddle1',0.6));}}
+}
+// called every fixed step after the physics
+function animStep(c,dt){
+  const S=c.skin;if(!S)return;if(!S.mixer){return;}
+  if(!c.k)initCtrl(c);const k=c.k;
+  const want=ctrlWanted(c);
+  if(k.mode==='ctrl'&&(!want||k.airT>0.9))enterRag(c);
+  else if(k.mode==='rag'&&want){const pel=c.P[c.pelvis];const sp=Math.hypot(pel.x-pel.ox,pel.y-pel.oy,pel.z-pel.oz)*60;
+    const standing=pel.y-groundAt(pel.x,pel.z,pel.y+0.5)>0.75;
+    if(sp<1.5&&(c._downT=(c._downT||0)+dt)>(standing?0.1:c.isPlayer?0.6:1.2)){c._downT=0;enterCtrl(c);if(standing){c.skin.blendLen=0.2;c.k.getup=0;}}}
+  if(k.mode!=='rag')c._downT=0;
+  S.blendT=(S.blendT||0)+dt;
+  if(k.mode==='ctrl'){
+    const w=WEAPONS[c.weapon];const armsRag=c.hasWeapon&&(w.len>0||c.swing>=0);
+    const v=Math.hypot(k.vx,k.vz),lim=Math.min(c.legFn[0],c.legFn[1]);
+    const back=Math.sin(k.yaw)*k.vx+Math.cos(k.yaw)*k.vz<-0.2;   // walking backwards while aiming
+    if(!k.grounded&&k.airT>0.15)setClip(S,'idle',0.4);
+    else if(v<0.3||k.getup>0)setClip(S,S.actions.idleN?'idleN':'idle',1);
+    else if(v<2.6||lim<0.6)setClip(S,'walk',clamp(v/WALK_V,0.5,2)*(back?-1:1));
+    else setClip(S,'run',clamp(v/RUN_V,0.75,1.4)*(back?-1:1));
+    S.mixer.update(dt);
+    _yawQ.setFromAxisAngle(_Y,k.yaw);const h=S.bones.Hips;h.quaternion.premultiply(_yawQ);_mv.copy(h.position).applyQuaternion(_yawQ);
+    h.position.set(k.x/S.M.scale+_mv.x,k.y/S.M.scale+_mv.y,k.z/S.M.scale+_mv.z);
+    if(lim<0.6&&v>0.3){const sideK=c.legFn[0]<c.legFn[1]?1:-1;_mq.setFromAxisAngle(_mv.set(Math.sin(k.yaw),0,Math.cos(k.yaw)),Math.sin(GT*7)*0.06*sideK);h.quaternion.premultiply(_mq);}
+    S.root.updateMatrixWorld(true);
+    if(armsRag)driveFromRagdoll(c,ARM_BONES);
+    blendIn(S);S.root.updateMatrixWorld(true);
+    pointsFromSkeleton(c,dt,!armsRag);
+  }else{driveFromRagdoll(c,'all');blendIn(S);S.root.updateMatrixWorld(true);}
+}
+function blendIn(S){const L=S.blendLen||ANIM_BLEND;if(S.blendT>=L)return;const t=S.blendT/L,e=t*t*(3-2*t);
+  for(const n of S.M.order){const b=S.bones[n],q=S.snap[n];if(b&&q)b.quaternion.copy(_mq2.copy(q).slerp(b.quaternion,e));}
+  _mv2.copy(S.bones.Hips.position);S.bones.Hips.position.lerpVectors(S.snapHips,_mv2,e);}
+function poseSkin(c){/* posing happens in animStep (fixed step) */}
+
 // ragdoll retargeting : each mapped bone is aimed along its ragdoll segment (with hinge-based twist)
-function driveFromRagdoll(c,drive,anim){
+function driveFromRagdoll(c,drive){
   const S=c.skin,M=S.M,P=c.P,B=S.bones;const pel=P[c.pelvis];
   const latP=v3(sub(P[c.hip[0]],P[c.hip[1]])),latC=v3(sub(P[c.sh[0]],P[c.sh[1]]));
   const upC=v3(sub(P[c.neck],P[c.chest])).normalize(),upP=v3(sub(P[c.chest],P[c.pelvis])).normalize();
