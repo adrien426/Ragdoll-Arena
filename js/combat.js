@@ -197,6 +197,11 @@ function separate(){
   for(let i=0;i<chars.length;i++)for(let j=i+1;j<chars.length;j++){const a=chars[i],b=chars[j];if(!a.alive&&!b.alive)continue;
     const hd=hdist(a.P[a.pelvis],b.P[b.pelvis]);if(hd>2.2)continue;
     // bodies on the ground (or thrown) collide point against point, so ragdolls pile up instead of merging
+    const kin=x=>x.k&&x.k.mode==='ctrl';
+    if(kin(a)&&kin(b))continue;                       // controllers keep their own spacing
+    if(kin(a)||kin(b)){const K=kin(a)?a:b,R=K===a?b:a,k=K.k;     // capsule pushes the ragdoll gently
+      for(const p of R.P){if(p.y<k.y-0.1||p.y>k.y+1.85)continue;const dx=p.x-k.x,dz=p.z-k.z,d=Math.hypot(dx,dz),rr=0.3+p.r;if(d<rr&&d>1e-4){const m=(rr-d)/d*0.35;p.x+=dx*m;p.z+=dz*m;}}
+      continue;}
     const down=x=>!x.alive||!x.conscious||!x.canStand||x.stun>0.5;
     if(down(a)||down(b)){if(Math.abs(a.P[a.pelvis].y-b.P[b.pelvis].y)<2.2){wake(a);
       for(const pa of a.P)for(const pb of b.P){const dx=pb.x-pa.x,dy=pb.y-pa.y,dz=pb.z-pa.z,R=pa.r+pb.r;if(dx>R||dx<-R||dy>R||dy<-R||dz>R||dz<-R)continue;const d=Math.sqrt(dx*dx+dy*dy+dz*dz);
@@ -214,15 +219,15 @@ const HAIRS=['#17120e','#4e3218','#2a1a10','#8a6a3a','#b8a070','#5a5a5a','#c4c4c
 function outfit(){return{skin:pick(SKINS),shirt:pick(SHIRTS),pants:pick(PANTS),hair:pick(HAIRS),shoe:pick(['#151515','#2a2016','#3a3a3a','#d8d8d8'])};}
 function enemyWeapon(){const pool=[0];if(wave>=2)pool.push(1);if(wave>=3)pool.push(2);if(wave>=4)pool.push(4);if(wave>=5)pool.push(3);if(wave>=6)pool.push(5);if(wave>=7)pool.push(7);if(wave>=8)pool.push(6);if(wave>=10)pool.push(8);if(wave>=3&&Math.random()<0.15)return 10;return pick(pool);}
 function spawnHostile(){
-  const pp=player.P[player.pelvis];const s=spawnPoint({x:pp.x,z:pp.z,y:pp.y},16,26,true)||spawnPoint({x:pp.x,z:pp.z,y:pp.y},12,32,false);if(!s)return false;
-  const o=outfit();o.weapon=enemyWeapon();o.y=s.y+1;
+  const pp=player.P[player.pelvis];const s=spawnPoint({x:pp.x,z:pp.z,y:pp.y},16,26,true,true)||spawnPoint({x:pp.x,z:pp.z,y:pp.y},16,32,true,true)||spawnPoint({x:pp.x,z:pp.z,y:pp.y},12,32,false);if(!s)return false;
+  const o=outfit();o.weapon=enemyWeapon();o.y=s.y+0.5;
   const e=makeChar(s.x,s.z,Math.atan2(pp.x-s.x,pp.z-s.z),1,o);
   const D=DIFF[SET.difficulty];e.dmgMul=D.dmg*(0.85+Math.min(wave,12)*0.03);e.cdMul=1.6;e.speedMul=rnd(0.75,1.0);e.ai.react=rnd(0.3,0.65);
   chars.push(e);return true;
 }
 function spawnCivilian(far){
-  const pp=player.P[player.pelvis];const s=spawnPoint({x:pp.x,z:pp.z,y:pp.y},far?22:6,far?42:32,false);if(!s)return false;
-  const o=outfit();o.y=s.y+1;const e=makeChar(s.x,s.z,rnd(0,6.28),2,o);e.speedMul=rnd(0.8,1.05);chars.push(e);return true;
+  const pp=player.P[player.pelvis];const s=spawnPoint({x:pp.x,z:pp.z,y:pp.y},far?22:6,far?42:32,false,far);if(!s)return false;
+  const o=outfit();o.y=s.y+0.5;const e=makeChar(s.x,s.z,rnd(0,6.28),2,o);e.speedMul=rnd(0.8,1.05);chars.push(e);return true;
 }
 function startWave(){wave++;toSpawn=3+wave*2;spawnT=0.5;waveActive=true;showMsg('VAGUE '+wave,2);}
 function gameTick(dt){

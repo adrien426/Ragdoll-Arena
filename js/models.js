@@ -4,7 +4,7 @@
    driven bone by bone by the physical ragdoll. Falls back to the
    procedural body when a model cannot be loaded.
    ===================================================================== */
-const MODELS={ready:false,failed:false,kinds:{},list:[]};
+const MODELS={ready:false,failed:false,kinds:{},list:[],done:0,total:0};
 const MODEL_FILES={james:'M',adam:'M',pnj_agent:'M',pnj_blond:'M',pnj_pilote:'M',pnj_pull:'M',pnj_soldat:'M',pnj_femme:'F'};
 const HOSTILE_KINDS=['pnj_soldat','pnj_agent','pnj_pull','pnj_blond'],CIVIL_M=['adam','pnj_pilote','pnj_pull','pnj_blond','pnj_agent','james'];
 
@@ -81,12 +81,13 @@ function prepModel(kind,gltf){
 
 function loadModels(){
   if(MODELS.ready||MODELS.loading)return;
-  if(!THREE.GLTFLoader||!THREE.SkeletonUtils||location.protocol==='file:'){MODELS.failed=true;return;}
+  if(!THREE.GLTFLoader||!THREE.SkeletonUtils||location.protocol==='file:'){MODELS.failed=true;MODELS.finished=true;return;}
   MODELS.loading=true;const ld=new THREE.GLTFLoader();if(window.MeshoptDecoder)ld.setMeshoptDecoder(MeshoptDecoder);
   const animP=fetch('assets/anims.json').then(r=>r.ok?r.json():null).then(j=>{MODELS.anims=j;}).catch(e=>console.warn('Animations unavailable',e));
-  const jobs=Object.keys(MODEL_FILES).map(k=>animP.then(()=>new Promise(res=>ld.load('assets/models/'+k+'.glb',g=>{try{const m=prepModel(k,g);if(m)MODELS.kinds[k]=m;}catch(e){console.warn('Model prep failed',k,e);}res();},undefined,e=>{console.warn('Model unavailable',k,e);res();}))));
+  MODELS.total=Object.keys(MODEL_FILES).length;
+  const jobs=Object.keys(MODEL_FILES).map(k=>animP.then(()=>new Promise(res=>ld.load('assets/models/'+k+'.glb',g=>{try{const m=prepModel(k,g);if(m)MODELS.kinds[k]=m;}catch(e){console.warn('Model prep failed',k,e);}MODELS.done++;res();},undefined,e=>{console.warn('Model unavailable',k,e);MODELS.done++;res();}))));
   Promise.all(jobs).then(()=>{MODELS.list=Object.keys(MODELS.kinds);MODELS.loading=false;
-    if(!MODELS.list.length){MODELS.failed=true;return;}
+    if(!MODELS.list.length){MODELS.failed=true;MODELS.finished=true;return;}MODELS.finished=true;
     MODELS.ready=true;for(const c of chars)attachSkin(c);});
 }
 function pickKind(c){const K=MODELS.kinds;
@@ -100,12 +101,13 @@ function attachSkin(c){
   const bones={},meshes=[];
   root.traverse(o=>{if(o.isBone)bones[shortBone(o.name)]=o;if(o.isSkinnedMesh){o.geometry=o.geometry.clone();const n=o.geometry.attributes.position.count;const col=new Float32Array(n*3).fill(1);o.geometry.setAttribute('color',new THREE.BufferAttribute(col,3));
     o.frustumCulled=false;o.castShadow=true;o.receiveShadow=false;meshes.push({m:o,reg:M.regs[o.name]});}});
-  scene.add(root);
+  root.visible=false;scene.add(root);
   const tint=c.isPlayer?1:rnd(0.82,1.08);
   const S={root,bones,meshes,M,kind,wq:{},tintK:tint,hash:'',hand:[bones.RightHand,bones.LeftHand],snap:{},snapHips:new THREE.Vector3(),spd:0,anim:false,blendT:1,mixer:null,actions:{},cur:null};
   if(Object.keys(M.clips).length>=3){S.mixer=new THREE.AnimationMixer(root);for(const k in M.clips){const a=S.mixer.clipAction(M.clips[k]);a.setLoop(THREE.LoopRepeat);S.actions[k]=a;}
     S.mixer.timeScale=1;S.phase=Math.random()*5;}
   c.skin=S;c.modelKind=kind;
+  if(S.mixer){initCtrl(c);if(ctrlWanted(c)){c.k.mode='ctrl';S.everCtrl=true;S.blendT=9;}}
 }
 function detachSkin(c){if(c.skin){scene.remove(c.skin.root);for(const e of c.skin.meshes)e.m.geometry.dispose();c.skin=null;}}
 
@@ -119,9 +121,10 @@ const ANIM_BLEND=0.3,GETUP_T=0.75,ARM_BONES=['RightArm','RightForeArm','RightHan
 const K_RAD=0.3,K_STEP=0.45,K_H=1.75,WALK_V=1.5,RUN_V=3.4;
 const _yawQ=new THREE.Quaternion(),_Y=new THREE.Vector3(0,1,0);
 function hasCtrl(c){return!!(c.skin&&c.skin.mixer);}
-function ctrlWanted(c){
-  if(!c.alive||!c.conscious||c.arrest||!c.canStand||c.tasedT>0||c.tetra||c.para)return false;
-  if(c.stun>0.25||c.koT>0||c.faintT>0)return false;
+function ctrlWanted(c,entering){
+  if(!c.alive||!c.conscious||c.arrest||c.tasedT>0||c.tetra||c.para)return false;
+  if(entering?!c.canStand:(c._noStandT||0)>0.5)return false;   // pain / dizziness hover around the limit : no flicker
+  if(c.stun>(entering?0:0.6)||c.koT>0||c.faintT>0)return false;
   const k=c.k;if(k){const wl=waterLevel(k.x,k.z),g=groundAt(k.x,k.z,k.y+K_STEP);if(wl>g+1.2)return false;}  // deep water : swim as a ragdoll
   return true;
 }
@@ -151,11 +154,11 @@ function ctrlMove(c,dt){
     const vn=k.vx*dx+k.vz*dz;if(vn<0){k.vx-=vn*dx;k.vz-=vn*dz;}}
   // terrain cliffs : do not walk off into the void sideways, only fall when moving off a ledge on purpose
   const g=groundAt(nx,nz,ny+K_STEP);
-  if(ny<=g+0.02&&k.vy<=0){ny=g;k.vy=0;k.grounded=true;}
+  if(ny<=g+0.02&&k.vy<=0){if(k.vy<-6.5&&!k.grounded){const L=c.legs[0];fallInjury(c,L.ft,-k.vy);}ny=g;k.vy=0;k.grounded=true;}
   else if(k.grounded&&k.vy<=0&&ny-g<0.35){ny=g;k.vy=0;}
   else k.grounded=false;
   // other characters : keep a body width apart
-  for(const o of chars){if(o===c)continue;const q=o.k&&o.k.mode==='ctrl'?o.k:o.P[o.pelvis];const dx=nx-q.x,dz=nz-q.z,d=Math.hypot(dx,dz);if(d<0.55&&d>1e-4&&Math.abs((q.y||0)-ny)<1.6){const m=(0.55-d)*0.5/d;nx+=dx*m;nz+=dz*m;}}
+  for(const o of chars){if(o===c||!o.k||o.k.mode!=='ctrl')continue;const q=o.k;const dx=nx-q.x,dz=nz-q.z,d=Math.hypot(dx,dz);if(d<0.55&&d>1e-4&&Math.abs((q.y||0)-ny)<1.6){const m=(0.55-d)*0.5/d;nx+=dx*m;nz+=dz*m;}}
   k.vx=(nx-k.x)/dt;k.vz=(nz-k.z)/dt;k.x=nx;k.y=ny;k.z=nz;
   if(!k.grounded)k.airT+=dt;else k.airT=0;
   // heading : face where you go, or where you aim while attacking
@@ -190,16 +193,20 @@ function pointsFromSkeleton(c,dt,armsToo){
 function animStep(c,dt){
   const S=c.skin;if(!S)return;if(!S.mixer){return;}
   if(!c.k)initCtrl(c);const k=c.k;
-  const want=ctrlWanted(c);
-  if(k.mode==='ctrl'&&(!want||k.airT>0.9))enterRag(c);
-  else if(k.mode==='rag'&&want){const pel=c.P[c.pelvis];const sp=Math.hypot(pel.x-pel.ox,pel.y-pel.oy,pel.z-pel.oz)*60;
+  c._noStandT=c.canStand?0:(c._noStandT||0)+dt;
+  const want=ctrlWanted(c,k.mode==='rag');k.modeT=(k.modeT||0)+dt;
+  if(k.mode==='ctrl'&&(!want||k.airT>0.9)){enterRag(c);k.modeT=0;}
+  c._wantT=want?(c._wantT||0)+dt:0;
+  if(k.mode==='rag'&&want&&k.modeT>0.8&&c._wantT>0.6){const pel=c.P[c.pelvis];const sp=Math.hypot(pel.x-pel.ox,pel.y-pel.oy,pel.z-pel.oz)*60;
     const standing=pel.y-groundAt(pel.x,pel.z,pel.y+0.5)>0.75;
-    if(sp<1.5&&(c._downT=(c._downT||0)+dt)>(standing?0.1:c.isPlayer?0.6:1.2)){c._downT=0;enterCtrl(c);if(standing){c.skin.blendLen=0.2;c.k.getup=0;if(!c.skin.everCtrl)c.skin.blendT=1;}c.skin.everCtrl=true;}}
+    if(sp<1.5&&(c._downT=(c._downT||0)+dt)>(standing?0.1:c.isPlayer?0.6:1.2)){c._downT=0;enterCtrl(c);if(standing){c.skin.blendLen=0.2;c.k.getup=0;if(!c.skin.everCtrl)c.skin.blendT=1;}c.skin.everCtrl=true;k.modeT=0;}}
   if(k.mode!=='rag')c._downT=0;
   S.blendT=(S.blendT||0)+dt;
   if(k.mode==='ctrl'){
-    const w=WEAPONS[c.weapon];const aiming=c.swing>=0||c._aimT>GT||(!c.isPlayer&&c.team===1&&c.ai&&c.ai.los);const armsRag=c.hasWeapon&&aiming;
-    if(armsRag!==S.armsRag){S.armsRag=armsRag;if(S.blendT>=(S.blendLen||ANIM_BLEND)){snapshot(S);S.blendT=0;S.blendLen=0.2;S.blendOnly=ARM_BONES;}}
+    const w=WEAPONS[c.weapon];const aiming=c.swing>=0||c._aimT>GT||(!c.isPlayer&&c.team===1&&c.ai&&c.ai.los);
+    const ik=c.hasWeapon&&aiming&&(w.type==='gun'||w.type==='taser')&&c.useArm===0&&c.reloadT<=0;   // firearms : real shooting stance
+    const armsRag=c.hasWeapon&&aiming&&!ik;S.ik=ik;
+    S.armsRag=armsRag;const any=armsRag||ik;if(any!==S.armsAny){S.armsAny=any;if(S.blendT>=(S.blendLen||ANIM_BLEND)){snapshot(S);S.blendT=0;S.blendLen=0.2;S.blendOnly=ARM_BONES;}}
     const v=Math.hypot(k.vx,k.vz),lim=Math.min(c.legFn[0],c.legFn[1]);
     const back=Math.sin(k.yaw)*k.vx+Math.cos(k.yaw)*k.vz<-0.2;   // walking backwards while aiming
     if(!k.grounded&&k.airT>0.15)setClip(S,'idle',0.4);
@@ -216,10 +223,11 @@ function animStep(c,dt){
     h.position.set(k.x/S.M.scale,k.y/S.M.scale+S.M.bind.Hips.wp.y-0.01+bob/S.M.scale,k.z/S.M.scale);
     if(lim<0.6&&v>0.3){const sideK=c.legFn[0]<c.legFn[1]?1:-1;_mq.setFromAxisAngle(_mv.set(Math.sin(k.yaw),0,Math.cos(k.yaw)),Math.sin(GT*7)*0.06*sideK);h.quaternion.premultiply(_mq);}
     S.root.updateMatrixWorld(true);
-    if(armsRag)driveFromRagdoll(c,ARM_BONES);
+    if(armsRag)driveFromRagdoll(c,ARM_BONES);else if(ik)aimStance(c,w);
     blendIn(S);S.root.updateMatrixWorld(true);
     pointsFromSkeleton(c,dt,!armsRag);
   }else{driveFromRagdoll(c,'all');blendIn(S);S.root.updateMatrixWorld(true);}
+  S.root.visible=true;
 }
 function blendIn(S){const L=S.blendLen||ANIM_BLEND;if(S.blendT>=L)return;const t=S.blendT/L,e=t*t*(3-2*t);
   for(const n of (S.blendOnly||S.M.order)){const b=S.bones[n],q=S.snap[n];if(b&&q)b.quaternion.copy(_mq2.copy(q).slerp(b.quaternion,e));}
@@ -227,6 +235,37 @@ function blendIn(S){const L=S.blendLen||ANIM_BLEND;if(S.blendT>=L)return;const t
   _mv2.copy(S.bones.Hips.position);S.bones.Hips.position.lerpVectors(S.snapHips,_mv2,e);}
 function poseSkin(c){/* posing happens in animStep (fixed step) */}
 
+// ---------- shooting stance (two-bone IK on the animated skeleton) ----------
+// Pistol : right arm extended toward the target, left hand cupping the grip.
+// Long guns : stock in the right shoulder, right hand on the grip, left hand forward on the handguard.
+function aimBone(S,n,p,f){const b=S.bones[n],mp=S.M.map[n];if(!b||!mp)return null;
+  basisMat(_mm,p,f);const fl=_mv2.copy(mp.f).sub(_mv.copy(mp.a).multiplyScalar(mp.f.dot(mp.a))).normalize();basisMat(_mm2,mp.a.clone(),fl);
+  _mm.multiply(_mm2.transpose());const wq=new THREE.Quaternion().setFromRotationMatrix(_mm);
+  b.parent.getWorldQuaternion(_mq);b.quaternion.copy(_mq.invert().multiply(wq));b.updateMatrixWorld(true);return wq;}
+function ikArm(S,side,T,pole){
+  const n=side?'Left':'Right';const sh=S.bones[n+'Arm'],el=S.bones[n+'ForeArm'],ha=S.bones[n+'Hand'];if(!sh||!el||!ha)return;
+  const Sp=new THREE.Vector3(),Ep=new THREE.Vector3(),Hp=new THREE.Vector3();sh.getWorldPosition(Sp);el.getWorldPosition(Ep);ha.getWorldPosition(Hp);
+  const a=Sp.distanceTo(Ep),b=Ep.distanceTo(Hp);const D=T.clone().sub(Sp);let L=D.length();if(L<1e-4)return;D.divideScalar(L);L=Math.min(L,(a+b)*0.999);
+  const x=(a*a-b*b+L*L)/(2*L),h=Math.sqrt(Math.max(0,a*a-x*x));const pp=pole.clone().sub(D.clone().multiplyScalar(pole.dot(D)));if(pp.lengthSq()<1e-6)pp.set(0,-1,0);pp.normalize();
+  const E=Sp.clone().add(D.clone().multiplyScalar(x)).add(pp.multiplyScalar(h));const Hn=Sp.clone().add(D.clone().multiplyScalar(L));
+  const u=E.clone().sub(Sp).normalize(),w=Hn.clone().sub(E).normalize();let nrm=new THREE.Vector3().crossVectors(u,w);if(nrm.lengthSq()<1e-4)nrm.crossVectors(u,new THREE.Vector3(0,-1,0));nrm.normalize();
+  aimBone(S,n+'Arm',u,nrm);aimBone(S,n+'ForeArm',w,nrm);aimBone(S,n+'Hand',w,nrm);}
+function aimStance(c,w){
+  const S=c.skin;S.root.updateMatrixWorld(true);
+  const shR=new THREE.Vector3();S.bones.RightArm.getWorldPosition(shR);const shL=new THREE.Vector3();S.bones.LeftArm.getWorldPosition(shL);
+  const tgt=c.aimP?v3(c.aimP):shR.clone().add(new THREE.Vector3(Math.sin(c.k.yaw),0,Math.cos(c.k.yaw)));
+  const right=shR.clone().sub(shL).normalize(),down=new THREE.Vector3(0,-1,0);
+  const long=w.two||w.id==='shotgun'||w.id==='rifle'||w.id==='sniper';
+  if(!long){const d=tgt.clone().sub(shR).normalize();const hand=shR.clone().add(d.clone().multiplyScalar(0.5)).add(right.clone().multiplyScalar(-0.06));
+    ikArm(S,0,hand,down.clone().add(right.clone().multiplyScalar(0.6)));
+    ikArm(S,1,hand.clone().add(right.clone().multiplyScalar(-0.05)).add(down.clone().multiplyScalar(0.03)),down.clone().add(right.clone().multiplyScalar(-0.6)));
+    S.aimDir=d;}
+  else{const stock=shR.clone().add(right.clone().multiplyScalar(-0.05)).add(down.clone().multiplyScalar(0.03));const d=tgt.clone().sub(stock).normalize();
+    const grip=stock.clone().add(d.clone().multiplyScalar(0.2)).add(down.clone().multiplyScalar(0.05)),fore=stock.clone().add(d.clone().multiplyScalar(0.5));
+    ikArm(S,0,grip,down.clone().add(right.clone().multiplyScalar(0.9)));ikArm(S,1,fore,down.clone().add(right.clone().multiplyScalar(-0.5)));
+    S.aimDir=d;}
+  S.root.updateMatrixWorld(true);
+}
 // ragdoll retargeting : each mapped bone is aimed along its ragdoll segment (with hinge-based twist)
 function driveFromRagdoll(c,drive){
   const S=c.skin,M=S.M,P=c.P,B=S.bones;const pel=P[c.pelvis];
@@ -269,22 +308,22 @@ function tintSkin(c){
   for(const e of S.meshes){const a=e.m.geometry.attributes.color,arr=a.array,rg=e.reg;for(let i=0;i<rg.length;i++){const cc=cols[rg[i]];arr[i*3]=cc.r;arr[i*3+1]=cc.g;arr[i*3+2]=cc.b;}a.needsUpdate=true;}
 }
 // world position of the model's hand (weapon grip)
-function skinWeaponDir(c,s){const S=c.skin;if(!S||S.armsRag||!c.k||c.k.mode!=='ctrl')return null;const n=s?'Left':'Right';const a=bonePos(S,n+'ForeArm'),b=bonePos(S,n+'Hand');if(!a||!b)return null;return norm(sub(b,a));}
+function skinWeaponDir(c,s){const S=c.skin;if(!S||S.armsRag||!c.k||c.k.mode!=='ctrl')return null;if(S.ik&&S.aimDir&&!s)return S.aimDir;const n=s?'Left':'Right';const a=bonePos(S,n+'ForeArm'),b=bonePos(S,n+'Hand');if(!a||!b)return null;return norm(sub(b,a));}
 function skinHand(c,s){const b=c.skin&&c.skin.hand[s];if(!b)return null;b.getWorldPosition(_mv);return{x:_mv.x,y:_mv.y,z:_mv.z};}
 
 /* ---------- vehicles & firearms from the 3D library ---------- */
-const PROPS={ready:false,veh:{},wpn:{}};
+const PROPS={ready:false,veh:{},wpn:{},done:0,total:0,finished:false};
 const VEH_KINDS=['kia','volvo','nsx'];
 // game weapon -> model, grip point (fraction of length / height) and real length in metres
 const WPN_MODEL={pistol:['w_deagle',0.24,0.3,0.26],rifle:['w_ak',0.44,0.32,0.88],sniper:['w_m16',0.42,0.32,1.05],shotgun:['w_aug',0.56,0.3,0.78]};
 function loadProps(){
-  if(!THREE.GLTFLoader||location.protocol==='file:')return;
-  const ld=new THREE.GLTFLoader();if(window.MeshoptDecoder)ld.setMeshoptDecoder(MeshoptDecoder);
+  if(!THREE.GLTFLoader||location.protocol==='file:'){PROPS.finished=true;return;}
+  const ld=new THREE.GLTFLoader();if(window.MeshoptDecoder)ld.setMeshoptDecoder(MeshoptDecoder);PROPS.total=VEH_KINDS.length+Object.keys(WPN_MODEL).length;
   const one=k=>Promise.all([fetch('assets/models/'+k+'.json').then(r=>r.json()),new Promise((res,rej)=>ld.load('assets/models/'+k+'.glb',res,undefined,rej))])
-    .then(([meta,g])=>{g.scene.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(/^w_/.test(k)){const ms=Array.isArray(o.material)?o.material:[o.material];for(const m of ms)if(m.color)m.color.multiplyScalar(0.55);}}});return{meta,scene:g.scene};}).catch(e=>{console.warn('Prop unavailable',k,e);return null;});
+    .then(([meta,g])=>{g.scene.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(/^w_/.test(k)){const ms=Array.isArray(o.material)?o.material:[o.material];for(const m of ms)if(m.color)m.color.multiplyScalar(0.55);}}});return{meta,scene:g.scene};}).catch(e=>{console.warn('Prop unavailable',k,e);return null;}).then(v=>{PROPS.done++;return v;});
   Promise.all(VEH_KINDS.map(k=>one(k).then(v=>{if(v)PROPS.veh[k]=v;}))
     .concat(Object.values(WPN_MODEL).map(m=>one(m[0]).then(v=>{if(v)PROPS.wpn[m[0]]=v;}))))
-    .then(()=>{PROPS.ready=Object.keys(PROPS.veh).length>0;});
+    .then(()=>{PROPS.ready=Object.keys(PROPS.veh).length>0;PROPS.finished=true;});
 }
 // a car model facing +X (the direction the game drives), wheels placed from its metadata
 function carModel(kind,burnt){
