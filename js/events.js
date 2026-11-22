@@ -91,7 +91,7 @@ function ballistic(a,b,vmax){let d=sub(b,a);let D=Math.hypot(d.x,d.z);const maxD
   const tf=clamp(D/(vmax*0.75),0.25,2.2);const vy=(d.y+0.5*9.8*tf*tf)/tf;return{x:d.x/tf/60,y:vy/60,z:d.z/tf/60};}
 // called from combat.js when a throw weapon is released
 function releaseThrow(c){const w=WEAPONS[c.weapon];if(w.kind==='fire'){releaseMolotov(c);return;}
-  const h=c.P[c.arms[c.useArm].ha];const v=ballistic(h,c.aimP,w.kind==='brick'?16:12);
+  const h=c.P[c.arms[Math.max(0,c.useArm)].ha];const v=ballistic(h,c.aimP,w.kind==='brick'?16:12);
   if(w.kind==='brick'){throwDebris(h,v,'brick',c);PROJ[PROJ.length-1].dmgK=1;}
   else{const mesh=new THREE.Mesh(GREN_GEO,M.grenade);mesh.castShadow=true;scene.add(mesh);PROJ.push({p:{x:h.x,y:h.y,z:h.z},v,owner:c,mesh,life:3.2,kind:'explosive'});SFX.click();}
   sfxAt(h);SFX.swing();}
@@ -118,7 +118,7 @@ function updThrown(q,dt,i){
 }
 
 /* ---------------- vehicles ---------------- */
-function buildCarMesh(paint){const g=new THREE.Group();const m=CAR_PAINT[paint%CAR_PAINT.length];
+function buildCarMesh(paint){if(PROPS.ready){const m=carModel();if(m)return m;}const g=new THREE.Group();const m=CAR_PAINT[paint%CAR_PAINT.length];
   const ad=(geo,mat,x,y,z)=>{const me=new THREE.Mesh(geo,mat);me.position.set(x,y,z);me.castShadow=true;g.add(me);return me;};
   ad(new THREE.BoxGeometry(4.3,0.72,1.8),m,0,0.62,0);ad(new THREE.BoxGeometry(2.2,0.6,1.62),m,-0.25,1.27,0);
   ad(new THREE.BoxGeometry(2.05,0.5,1.66),M.glass,-0.25,1.25,0);ad(new THREE.BoxGeometry(0.06,0.16,1.4),M.lampHead,2.16,0.72,0);

@@ -271,3 +271,37 @@ function tintSkin(c){
 // world position of the model's hand (weapon grip)
 function skinWeaponDir(c,s){const S=c.skin;if(!S||S.armsRag||!c.k||c.k.mode!=='ctrl')return null;const n=s?'Left':'Right';const a=bonePos(S,n+'ForeArm'),b=bonePos(S,n+'Hand');if(!a||!b)return null;return norm(sub(b,a));}
 function skinHand(c,s){const b=c.skin&&c.skin.hand[s];if(!b)return null;b.getWorldPosition(_mv);return{x:_mv.x,y:_mv.y,z:_mv.z};}
+
+/* ---------- vehicles & firearms from the 3D library ---------- */
+const PROPS={ready:false,veh:{},wpn:{}};
+const VEH_KINDS=['kia','volvo','nsx'];
+// game weapon -> model, grip point (fraction of length / height) and real length in metres
+const WPN_MODEL={pistol:['w_deagle',0.24,0.3,0.26],rifle:['w_ak',0.44,0.32,0.88],sniper:['w_m16',0.42,0.32,1.05],shotgun:['w_aug',0.56,0.3,0.78]};
+function loadProps(){
+  if(!THREE.GLTFLoader||location.protocol==='file:')return;
+  const ld=new THREE.GLTFLoader();if(window.MeshoptDecoder)ld.setMeshoptDecoder(MeshoptDecoder);
+  const one=k=>Promise.all([fetch('assets/models/'+k+'.json').then(r=>r.json()),new Promise((res,rej)=>ld.load('assets/models/'+k+'.glb',res,undefined,rej))])
+    .then(([meta,g])=>{g.scene.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(/^w_/.test(k)){const ms=Array.isArray(o.material)?o.material:[o.material];for(const m of ms)if(m.color)m.color.multiplyScalar(0.55);}}});return{meta,scene:g.scene};}).catch(e=>{console.warn('Prop unavailable',k,e);return null;});
+  Promise.all(VEH_KINDS.map(k=>one(k).then(v=>{if(v)PROPS.veh[k]=v;}))
+    .concat(Object.values(WPN_MODEL).map(m=>one(m[0]).then(v=>{if(v)PROPS.wpn[m[0]]=v;}))))
+    .then(()=>{PROPS.ready=Object.keys(PROPS.veh).length>0;});
+}
+// a car model facing +X (the direction the game drives), wheels placed from its metadata
+function carModel(kind,burnt){
+  const v=PROPS.veh[kind||pick(Object.keys(PROPS.veh))];if(!v)return null;
+  const inner=new THREE.Group();const body=v.scene.getObjectByName('body'),wheel=v.scene.getObjectByName('wheel');
+  if(body)inner.add(body.clone());
+  if(wheel&&v.meta.wheels)for(const p of v.meta.wheels){const w=wheel.clone();w.position.set(p[0],p[1],p[2]);if(p[0]<0)w.rotation.y=Math.PI;inner.add(w);}
+  // the body paint is a placeholder material in the library models : give each car a real paint
+  const paint=pick(CAR_PAINT);
+  inner.traverse(o=>{if(!o.isMesh)return;if(burnt){o.material=M.burnt;return;}
+    if(Array.isArray(o.material))o.material=o.material.map(m=>m.name==='PAINT'?paint:m);else if(o.material.name==='PAINT')o.material=paint;});
+  inner.rotation.y=Math.PI/2;   // model forward is +Z
+  const g=new THREE.Group();g.add(inner);g.userData.len=v.meta.len;g.userData.w=v.meta.w;return g;
+}
+// real firearm inside a weapon group (group forward = +Z, origin = palm)
+function realWeapon(g,w){
+  const m=WPN_MODEL[w.id];const v=m&&PROPS.wpn[m[0]];if(!v)return false;
+  const o=v.scene.clone();const L=m[3],k=L/v.meta.len;o.scale.setScalar(k);o.position.set(0,(0.5-m[2])*v.meta.h*k,0.04+(0.5-m[1])*L);
+  while(g.children.length)g.remove(g.children[0]);g.add(o);g.userData.real=true;return true;
+}

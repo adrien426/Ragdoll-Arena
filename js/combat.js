@@ -109,7 +109,7 @@ function fireTaser(c,w){
   if(hit.c&&vlen(sub(hit.point,mz))<=w.range+0.4)applyHit(hit.c,hit.hi,hit.t,hit.point,dir,w,c);
 }
 const PROJ=[];const BOTTLE_GEO=new THREE.CylinderGeometry(0.035,0.04,0.2,8);
-function releaseMolotov(c){const h=c.P[c.arms[c.useArm].ha];const d=norm(sub(c.aimP,h));const dist=Math.min(25,vlen(sub(c.aimP,h)));const v=mul(d,(7+dist*0.38)/60);v.y+=0.05;
+function releaseMolotov(c){const h=c.P[c.arms[Math.max(0,c.useArm)].ha];const d=norm(sub(c.aimP,h));const dist=Math.min(25,vlen(sub(c.aimP,h)));const v=mul(d,(7+dist*0.38)/60);v.y+=0.05;
   const mesh=new THREE.Mesh(BOTTLE_GEO,M.glassGreen);mesh.castShadow=true;scene.add(mesh);PROJ.push({p:{x:h.x,y:h.y,z:h.z},v,owner:c,mesh,life:6});sfxAt(h);SFX.swing();}
 const FIRES=[];
 function updProjectiles(dt){
