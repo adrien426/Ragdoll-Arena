@@ -497,4 +497,5 @@ resize();
 buildMap();applyEnvironment();
 player=makeChar(MAP.spawn.x,MAP.spawn.z,MAP.yaw,0,{name:'Vous',allWeapons:true,weapon:4,shirt:'#2f55a3',skin:'#e3b48c'});chars.push(player);camYaw=MAP.yaw;
 $('loadMsg').style.display='none';$('start').classList.remove('hidden');$('startSet').classList.remove('hidden');
+loadModels();
 requestAnimationFrame(loop);

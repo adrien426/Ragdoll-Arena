@@ -50,7 +50,8 @@ function makeChar(X,Z,yaw,team,o){
   c.rc={};c.colT=-1;
   initMedical(c);c.bloodMax=c.weight*(c.sex==='M'?70:65)*rnd(0.97,1.03);c.blood=c.bloodMax;c.boneK=c.age>=75?0.65:c.age>=65?0.75:c.age>=50?0.9:1;c.thermoK=c.age>=70?0.8:1;
   c.ammo=WEAPONS.map(w=>w.mag||0);c.reloadT=0;
-  buildDrawLists(c);buildWeaponMeshes(c,o.allWeapons);
+  buildDrawLists(c);buildWeaponMeshes(c,o.allWeapons);c.modelKind=o.model||null;
+  if(typeof attachSkin==='function'&&MODELS.ready)attachSkin(c);
   return c;
 }
 function buildDrawLists(c){
@@ -79,7 +80,7 @@ function buildWeapon(wg,w){
     if(w.id==='rifle')ad(new THREE.BoxGeometry(0.03,0.12,0.05),M.metal,0,-0.07,0.2);
     if(w.id==='sniper')ad(new THREE.CylinderGeometry(0.022,0.022,0.3,10),M.metal,0,0.08,0.3,Math.PI/2);}
 }
-function removeChar(c){if(c.wg)scene.remove(c.wg);const i=chars.indexOf(c);if(i>=0)chars.splice(i,1);}
+function removeChar(c){if(c.wg)scene.remove(c.wg);if(c.skin)detachSkin(c);const i=chars.indexOf(c);if(i>=0)chars.splice(i,1);}
 
 /* ---------- surface anchors (wounds, shards) ---------- */
 function capA(c,h){return h.ta?lerp3(c.P[h.a],c.P[h.b],h.ta):c.P[h.a];}
@@ -257,8 +258,9 @@ function renderCharacters(){
   let ci=0,si=0,bi=0,hi=0,ei=0,wi=0,di=0;
   const camP=camera.position;
   for(const c of chars){
-    if(GT-c.colT>0.2||c.colT<0){updateColors(c);c.colT=GT;}
     const P=c.P,rc=c.rc;
+    if(c.skin){poseSkin(c);if(GT-c.colT>0.2||c.colT<0){tintSkin(c);c.colT=GT;}}else{
+    if(GT-c.colT>0.2||c.colT<0){updateColors(c);c.colT=GT;}
     for(const d of c.dSeg){if(ci>=POOL.cyl.instanceMatrix.count)break;const a=P[d[0]],b=P[d[1]];_v.set(b.x-a.x,b.y-a.y,b.z-a.z);const L=_v.length()||1e-4;_v.multiplyScalar(1/L);_q.setFromUnitVectors(YA,_v);_p.set((a.x+b.x)/2,(a.y+b.y)/2,(a.z+b.z)/2);_s.set(d[2],L,d[2]);_m.compose(_p,_q,_s);POOL.cyl.setMatrixAt(ci,_m);POOL.cyl.setColorAt(ci,rc[d[3]]);ci++;}
     _q.identity();
     for(const j of c.dJoint){const p=P[j[0]];_p.set(p.x,p.y,p.z);_s.setScalar(j[1]);_m.compose(_p,_q,_s);POOL.sph.setMatrixAt(si,_m);POOL.sph.setColorAt(si,rc[j[2]]);si++;}
@@ -282,13 +284,14 @@ function renderCharacters(){
       const br=add(hp,add(mul(r,sg*0.036),add(mul(u,0.042),mul(fw,0.103))));_p.set(br.x,br.y,br.z);_s.set(0.03,0.006,0.008);_m.compose(_p,_q,_s);POOL.box.setMatrixAt(bi,_m);POOL.box.setColorAt(bi,c.col.hair);bi++;}
     const ns=add(hp,add(mul(u,-0.012),mul(fw,0.112)));_p.set(ns.x,ns.y,ns.z);_s.set(0.024,0.045,0.035);_m.compose(_p,_q,_s);POOL.box.setMatrixAt(bi,_m);POOL.box.setColorAt(bi,rc.head);bi++;
     const mo=add(hp,add(mul(u,-0.055),mul(fw,0.1)));_p.set(mo.x,mo.y,mo.z);_s.set(0.04,c.painEff>50&&c.alive?0.012:0.007,0.012);_m.compose(_p,_q,_s);POOL.box.setMatrixAt(bi,_m);POOL.box.setColorAt(bi,MOUTHC);bi++;
+    }
     // wounds
     for(const w of c.wounds){if(wi>=360)break;const p=anchorPos(c,w.an,-0.004);_p.set(p.x,p.y,p.z);const sz=w.size||0.02;_s.setScalar(sz*(w.bandaged?1.6:1));_m.compose(_p,_q.identity(),_s);POOL.wound.setMatrixAt(wi,_m);POOL.wound.setColorAt(wi,w.bandaged?BANDC:w.exit?WEXIT:WENT);wi++;}
     for(const sh of c.shards){if(di>=80)break;const p=anchorPos(c,sh.an,0.012);_p.set(p.x,p.y,p.z);_q.setFromEuler(sh.e);_s.set(0.014,0.014,0.07);_m.compose(_p,_q,_s);POOL.shard.setMatrixAt(di,_m);POOL.shard.setColorAt(di,c.splint[sh.id]?BANDC:SHARDC);di++;}
     // weapon
     if(c.wm){for(const g of c.wm)if(g)g.visible=false;
       const w=WEAPONS[c.weapon],g=c.wm[c.weapon];
-      if(g&&c.alive&&c.useArm>=0&&w.len>0&&c.reloadT<=0&&!c.crawling){g.visible=true;const h=P[c.arms[c.useArm].ha];g.position.set(h.x,h.y,h.z);_v.set(c.wDir.x,c.wDir.y,c.wDir.z).normalize();g.quaternion.setFromUnitVectors(ZA,_v);}}
+      if(g&&c.alive&&c.useArm>=0&&w.len>0&&c.reloadT<=0&&!c.crawling){g.visible=true;const h=(c.skin&&skinHand(c,c.useArm))||P[c.arms[c.useArm].ha];g.position.set(h.x,h.y,h.z);_v.set(c.wDir.x,c.wDir.y,c.wDir.z).normalize();g.quaternion.setFromUnitVectors(ZA,_v);}}
   }
   POOL.cyl.count=ci;POOL.sph.count=si;POOL.box.count=bi;POOL.hair.count=hi;POOL.eye.count=ei;POOL.wound.count=wi;POOL.shard.count=di;
   for(const k in POOL){const m=POOL[k];m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;}

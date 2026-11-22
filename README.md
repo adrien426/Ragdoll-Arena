@@ -19,6 +19,9 @@ Jeu sandbox / combat ragdoll ultra réaliste dans le navigateur (Three.js r128, 
 - `js/medical.js` : blessures, physiologie, diagnostic, survie
 - `js/combat.js` : armes, IA, vagues
 - `js/events.js` : catastrophes et outils
+- `js/models.js` : personnages réalistes (squelettes Mixamo) pilotés os par os par le ragdoll physique
+- `assets/models/` : personnages du dossier 3D (GLB compressés meshopt + WebP)
+- `lib/` : GLTFLoader, décodeur meshopt et SkeletonUtils de three.js r128
 - `js/ui.js` : interface, caméra, boucle de jeu
 
 ## Publication (GitHub Pages)
