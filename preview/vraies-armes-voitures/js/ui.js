@@ -464,6 +464,7 @@ function step(dt){
   for(const e of chars)if(e!==player)aiTick(e,dt);
   for(const c of chars){physics(c);control(c,dt);attackLogic(c,dt);burnTick(c,dt);}
   separate();updProjectiles(dt);updFires(dt);updEvents(dt);
+  for(const c of chars)if(c.skin)animStep(c,dt);
   physAcc+=dt;if(physAcc>=0.05){for(const c of chars){physiology(c,physAcc);speakTick(c);}physAcc=0;}
   progT-=dt;if(progT<=0){progT=0.5;for(const c of chars){c._prog=prognosis(c);c._ps=survival(c).ps;c._ps0=noCare(c,c._prog,c._ps);}}
   updParticles(dt);updSprites(dt);updLines(dt);
@@ -486,7 +487,7 @@ let last=0,acc=0,progT=0;
 function loop(t){
   requestAnimationFrame(loop);
   const now=t/1000;const dt=Math.min(0.05,now-last||0);last=now;
-  if(running&&!paused&&player){acc+=dt*TIME_SCALE;let n=0;while(acc>=1/60&&n<3){step(1/60);acc-=1/60;n++;}if(n>=3)acc=0;}
+  if(running&&!paused&&player){acc+=dt*TIME_SCALE;let n=0;while(acc>=1/60&&n<4){step(1/60);acc-=1/60;n++;}if(n>=4)acc=Math.min(acc,1/60);}
   if(player){updateCamera();renderCharacters();}
   updRain(dt);
   renderer.render(scene,camera);drawHUD(dt);
@@ -497,5 +498,5 @@ resize();
 buildMap();applyEnvironment();
 player=makeChar(MAP.spawn.x,MAP.spawn.z,MAP.yaw,0,{name:'Vous',allWeapons:true,weapon:4,shirt:'#2f55a3',skin:'#e3b48c'});chars.push(player);camYaw=MAP.yaw;
 $('loadMsg').style.display='none';$('start').classList.remove('hidden');$('startSet').classList.remove('hidden');
-loadModels();
+loadModels();loadProps();
 requestAnimationFrame(loop);
