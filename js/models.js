@@ -73,7 +73,8 @@ function prepModel(kind,gltf){
   const order=[];(function walk(b){order.push(shortBone(b.name));for(const ch of b.children)if(ch.isBone)walk(ch);})(bones.Hips);
   // locomotion clips, hips height adapted to this body (authored for a 0.93 m hips height, in place)
   const clips={};if(MODELS.anims)for(const k of ['idle','idleN','walk','run']){const raw=MODELS.anims[k];if(!raw)continue;const cl=THREE.AnimationClip.parse(raw);
-    for(const tr of cl.tracks)if(/Hips\.position$/.test(tr.name)){const v=tr.values,kk=hipsY/0.93;for(let i=0;i<v.length;i+=3){v[i]=0;v[i+1]*=kk;v[i+2]=0;}}
+    // the hips height is set by the controller : drop the position track so the mixer never fights it
+    cl.tracks=cl.tracks.filter(tr=>!/\.position$/.test(tr.name));
     clips[k]=cl;}
   return{kind,scene:sc,bind,map,scale,regs,order,clips,sex:MODEL_FILES[kind]};
 }
@@ -125,9 +126,9 @@ function ctrlWanted(c){
   return true;
 }
 function initCtrl(c){const pel=c.P[c.pelvis];c.k={x:pel.x,y:groundAt(pel.x,pel.z,pel.y),z:pel.z,vx:0,vy:0,vz:0,yaw:c.yaw,grounded:true,mode:'rag',getup:0,airT:0};}
-function enterCtrl(c){const k=c.k,pel=c.P[c.pelvis];k.x=pel.x;k.z=pel.z;k.y=groundAt(pel.x,pel.z,pel.y+0.5);k.vx=k.vy=k.vz=0;k.mode='ctrl';k.getup=GETUP_T;k.grounded=true;
+function enterCtrl(c){if(c.skin)c.skin.blendOnly=null;const k=c.k,pel=c.P[c.pelvis];k.x=pel.x;k.z=pel.z;k.y=groundAt(pel.x,pel.z,pel.y+0.5);k.vx=k.vy=k.vz=0;k.mode='ctrl';k.getup=GETUP_T;k.grounded=true;
   const S=c.skin;snapshot(S);S.blendT=0;S.blendLen=GETUP_T;c.upT=1;}
-function enterRag(c){const k=c.k;k.mode='rag';const S=c.skin;snapshot(S);S.blendT=0;S.blendLen=0.18;}
+function enterRag(c){const k=c.k;k.mode='rag';const S=c.skin;snapshot(S);S.blendOnly=null;S.blendT=0;S.blendLen=0.18;}
 // horizontal circle vs box push-out (slide along walls), ground snap with step-up / step-down
 function ctrlMove(c,dt){
   const k=c.k,inp=c.input;
@@ -193,20 +194,26 @@ function animStep(c,dt){
   if(k.mode==='ctrl'&&(!want||k.airT>0.9))enterRag(c);
   else if(k.mode==='rag'&&want){const pel=c.P[c.pelvis];const sp=Math.hypot(pel.x-pel.ox,pel.y-pel.oy,pel.z-pel.oz)*60;
     const standing=pel.y-groundAt(pel.x,pel.z,pel.y+0.5)>0.75;
-    if(sp<1.5&&(c._downT=(c._downT||0)+dt)>(standing?0.1:c.isPlayer?0.6:1.2)){c._downT=0;enterCtrl(c);if(standing){c.skin.blendLen=0.2;c.k.getup=0;}}}
+    if(sp<1.5&&(c._downT=(c._downT||0)+dt)>(standing?0.1:c.isPlayer?0.6:1.2)){c._downT=0;enterCtrl(c);if(standing){c.skin.blendLen=0.2;c.k.getup=0;if(!c.skin.everCtrl)c.skin.blendT=1;}c.skin.everCtrl=true;}}
   if(k.mode!=='rag')c._downT=0;
   S.blendT=(S.blendT||0)+dt;
   if(k.mode==='ctrl'){
-    const w=WEAPONS[c.weapon];const armsRag=c.hasWeapon&&(w.len>0||c.swing>=0);
+    const w=WEAPONS[c.weapon];const aiming=c.swing>=0||c._aimT>GT||(!c.isPlayer&&c.team===1&&c.ai&&c.ai.los);const armsRag=c.hasWeapon&&aiming;
+    if(armsRag!==S.armsRag){S.armsRag=armsRag;if(S.blendT>=(S.blendLen||ANIM_BLEND)){snapshot(S);S.blendT=0;S.blendLen=0.2;S.blendOnly=ARM_BONES;}}
     const v=Math.hypot(k.vx,k.vz),lim=Math.min(c.legFn[0],c.legFn[1]);
     const back=Math.sin(k.yaw)*k.vx+Math.cos(k.yaw)*k.vz<-0.2;   // walking backwards while aiming
     if(!k.grounded&&k.airT>0.15)setClip(S,'idle',0.4);
     else if(v<0.3||k.getup>0)setClip(S,S.actions.idleN?'idleN':'idle',1);
     else if(v<2.6||lim<0.6)setClip(S,'walk',clamp(v/WALK_V,0.5,2)*(back?-1:1));
     else setClip(S,'run',clamp(v/RUN_V,0.75,1.4)*(back?-1:1));
+    // three.js only rewrites a property when its animated value changes : restore the clip's own values first,
+    // so our post-processing (heading, arms, blends) never accumulates from one step to the next
+    const CQ=S.clipQ||(S.clipQ={});for(const n of S.M.order){const bb=S.bones[n];if(bb&&CQ[n])bb.quaternion.copy(CQ[n]);}
     S.mixer.update(dt);
-    _yawQ.setFromAxisAngle(_Y,k.yaw);const h=S.bones.Hips;h.quaternion.premultiply(_yawQ);_mv.copy(h.position).applyQuaternion(_yawQ);
-    h.position.set(k.x/S.M.scale+_mv.x,k.y/S.M.scale+_mv.y,k.z/S.M.scale+_mv.z);
+    for(const n of S.M.order){const bb=S.bones[n];if(bb)(CQ[n]||(CQ[n]=new THREE.Quaternion())).copy(bb.quaternion);}
+    _yawQ.setFromAxisAngle(_Y,k.yaw);const h=S.bones.Hips;h.quaternion.premultiply(_yawQ);
+    const bob=v>0.3&&k.grounded?Math.abs(Math.sin(GT*(v>2.6?9:6.2)))*(v>2.6?0.035:0.018):0;
+    h.position.set(k.x/S.M.scale,k.y/S.M.scale+S.M.bind.Hips.wp.y-0.01+bob/S.M.scale,k.z/S.M.scale);
     if(lim<0.6&&v>0.3){const sideK=c.legFn[0]<c.legFn[1]?1:-1;_mq.setFromAxisAngle(_mv.set(Math.sin(k.yaw),0,Math.cos(k.yaw)),Math.sin(GT*7)*0.06*sideK);h.quaternion.premultiply(_mq);}
     S.root.updateMatrixWorld(true);
     if(armsRag)driveFromRagdoll(c,ARM_BONES);
@@ -215,7 +222,8 @@ function animStep(c,dt){
   }else{driveFromRagdoll(c,'all');blendIn(S);S.root.updateMatrixWorld(true);}
 }
 function blendIn(S){const L=S.blendLen||ANIM_BLEND;if(S.blendT>=L)return;const t=S.blendT/L,e=t*t*(3-2*t);
-  for(const n of S.M.order){const b=S.bones[n],q=S.snap[n];if(b&&q)b.quaternion.copy(_mq2.copy(q).slerp(b.quaternion,e));}
+  for(const n of (S.blendOnly||S.M.order)){const b=S.bones[n],q=S.snap[n];if(b&&q)b.quaternion.copy(_mq2.copy(q).slerp(b.quaternion,e));}
+  if(S.blendOnly)return;
   _mv2.copy(S.bones.Hips.position);S.bones.Hips.position.lerpVectors(S.snapHips,_mv2,e);}
 function poseSkin(c){/* posing happens in animStep (fixed step) */}
 
@@ -261,4 +269,5 @@ function tintSkin(c){
   for(const e of S.meshes){const a=e.m.geometry.attributes.color,arr=a.array,rg=e.reg;for(let i=0;i<rg.length;i++){const cc=cols[rg[i]];arr[i*3]=cc.r;arr[i*3+1]=cc.g;arr[i*3+2]=cc.b;}a.needsUpdate=true;}
 }
 // world position of the model's hand (weapon grip)
+function skinWeaponDir(c,s){const S=c.skin;if(!S||S.armsRag||!c.k||c.k.mode!=='ctrl')return null;const n=s?'Left':'Right';const a=bonePos(S,n+'ForeArm'),b=bonePos(S,n+'Hand');if(!a||!b)return null;return norm(sub(b,a));}
 function skinHand(c,s){const b=c.skin&&c.skin.hand[s];if(!b)return null;b.getWorldPosition(_mv);return{x:_mv.x,y:_mv.y,z:_mv.z};}
