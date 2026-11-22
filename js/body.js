@@ -102,12 +102,21 @@ function physics(c){
     if(p.y<wl){vx*=0.92;vy*=0.9;vz*=0.92;vy+=G*(i===0?0.9:i===3?0.85:i===2?1.3:i<=8?1.16:0.95)*(i<=8?1-(c.sink||0)*0.38:1);}
     p.ox=p.x;p.oy=p.y;p.oz=p.z;p.x+=vx;p.y+=vy-G;p.z+=vz;p.vy=vy;p.top=false;}
   const near=boxesNear(pel.x,pel.z,2.6);
+  // continuous collision: fast points must not tunnel through walls
+  for(const p of P){const dx=p.x-p.ox,dy=p.y-p.oy,dz=p.z-p.oz,dl=Math.sqrt(dx*dx+dy*dy+dz*dz);if(dl<p.r*0.8)continue;
+    const o={x:p.ox,y:p.oy,z:p.oz},d={x:dx/dl,y:dy/dl,z:dz/dl};let tb=dl+p.r;
+    for(const b of near){if(o.x>b.min.x-0.01&&o.x<b.max.x+0.01&&o.z>b.min.z-0.01&&o.z<b.max.z+0.01&&o.y>b.min.y-0.01&&o.y<b.max.y+0.01)continue;const t=rayBox(o,d,b);if(t!==null&&t<tb)tb=t;}
+    if(tb<dl+p.r){const k=Math.max(0,tb-p.r*0.6);p.x=o.x+d.x*k;p.y=o.y+d.y*k;p.z=o.z+d.z*k;
+      // keep the tangential velocity, drop the part going into the wall
+      p.ox=p.x-dx*0.3;p.oy=p.y-dy*0.3;p.oz=p.z-dz*0.3;}}
   for(let it=0;it<8;it++){
+    if(it>=3)jointLimits(c,it>=5);
     for(const s of c.S){
       if(!s.active)continue;const a=P[s.a],b=P[s.b];let dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;const d=Math.sqrt(dx*dx+dy*dy+dz*dz)||1e-6;
       if(s.kind==='min'&&d>=s.len)continue;
       const k=s.k*(d-s.len)/d*0.5;dx*=k;dy*=k;dz*=k;a.x+=dx;a.y+=dy;a.z+=dz;b.x-=dx;b.y-=dy;b.z-=dz;
     }
+
     for(let i=0;i<P.length;i++){const p=P[i];
       const th=terrainH(p.x,p.z);
       if(p.y<th+p.r){
@@ -119,6 +128,8 @@ function physics(c){
         if(p.x>b.min.x-r&&p.x<b.max.x+r&&p.y>b.min.y-r&&p.y<b.max.y+r&&p.z>b.min.z-r&&p.z<b.max.z+r){
           const o0=p.x-(b.min.x-r),o1=(b.max.x+r)-p.x,o2=p.y-(b.min.y-r),o3=(b.max.y+r)-p.y,o4=p.z-(b.min.z-r),o5=(b.max.z+r)-p.z;
           let mi=0,mv=o0;if(o1<mv){mi=1;mv=o1;}if(o2<mv){mi=2;mv=o2;}if(o3<mv){mi=3;mv=o3;}if(o4<mv){mi=4;mv=o4;}if(o5<mv){mi=5;mv=o5;}
+          // deep inside : leave through the face the point came from, never through the far side
+          if(mv>r*1.2){const e=0.002;if(p.ox<=b.min.x-r+e)mi=0;else if(p.ox>=b.max.x+r-e)mi=1;else if(p.oz<=b.min.z-r+e)mi=4;else if(p.oz>=b.max.z+r-e)mi=5;else if(p.oy>=b.max.y+r-e)mi=3;else if(p.oy<=b.min.y-r+e)mi=2;}
           if(mi===0){p.x=b.min.x-r;p.ox=p.x;}else if(mi===1){p.x=b.max.x+r;p.ox=p.x;}
           else if(mi===2){p.y=b.min.y-r;}else if(mi===3){if(it===0&&p.vy<minVy){minVy=p.vy;impP=i;}p.y=b.max.y+r;if(p.oy>p.y)p.oy=p.y;p.top=true;}
           else if(mi===4){p.z=b.min.z-r;p.oz=p.z;}else{p.z=b.max.z+r;p.oz=p.z;}
@@ -128,11 +139,53 @@ function physics(c){
   }
   for(const p of P){if(p.top||p.y<=terrainH(p.x,p.z)+p.r+0.01){p.ox=p.x-(p.x-p.ox)*FRIC;p.oz=p.z-(p.z-p.oz)*FRIC;}}
   avgVy/=P.length;
+  // safety net : a single non-finite value would spread to the whole body, restore the last good pose instead
+  if(!Number.isFinite(P[c.pelvis].x+P[c.pelvis].y+P[c.pelvis].z+P[c.head].y)){if(c._safe){for(let i=0;i<P.length;i++){const q=c._safe[i];Object.assign(P[i],{x:q[0],y:q[1],z:q[2],ox:q[0],oy:q[1],oz:q[2]});}}return;}
+  if(!c._safeT||GT-c._safeT>0.5){c._safeT=GT;c._safe=P.map(p=>[p.x,p.y,p.z]);}
   if(minVy<-0.108&&impP>=0&&avgVy<-0.09)fallInjury(c,impP,-Math.max(minVy,avgVy*1.1)*60);
   if(!c.alive){let mv=0;for(const p of P){const v=Math.abs(p.x-p.ox)+Math.abs(p.y-p.oy)+Math.abs(p.z-p.oz);if(v>mv)mv=v;}c.sleep=mv<0.0009?c.sleep+1:0;}
   c.inWater=pel.y<wl;const hd=P[c.head];const hu=norm(sub(hd,P[c.neck]));const hr=orthoN(sub(P[c.sh[0]],P[c.sh[1]]),hu);const hf=cross(hu,hr);const mo={x:hd.x+hf.x*0.085-hu.x*0.045,y:hd.y+hf.y*0.085-hu.y*0.045,z:hd.z+hf.z*0.085-hu.z*0.045};c.mouth=mo;c.headUnder=mo.y<waterLevel(mo.x,mo.z)-0.005;
 }
 function wake(c){c.sleep=0;}
+/* ---------- anatomical joint limits & self collision ----------
+   Knee = hinge bending backwards only, hip = cone, limbs cannot pass through the torso or each other. */
+function _pushPt(p,dx,dy,dz,k){p.x+=dx*k;p.y+=dy*k;p.z+=dz*k;}
+function jointLimits(c,self){
+  const P=c.P;const pel=P[c.pelvis],ch=P[c.chest];
+  let ux=ch.x-pel.x,uy=ch.y-pel.y,uz=ch.z-pel.z;let l=Math.hypot(ux,uy,uz)||1;ux/=l;uy/=l;uz/=l;
+  const h0=P[c.hip[0]],h1=P[c.hip[1]];let rx=h0.x-h1.x,ry=h0.y-h1.y,rz=h0.z-h1.z;l=Math.hypot(rx,ry,rz)||1;rx/=l;ry/=l;rz/=l; // body right
+  const fx=uy*rz-uz*ry,fy=uz*rx-ux*rz,fz=ux*ry-uy*rx; // forward = up x right
+  for(let s=0;s<2;s++){const L=c.legs[s],hip=P[L.hip],kn=P[L.kn],ft=P[L.ft],sg=s===0?1:-1;
+    // ---- hip cone : no hyper-extension, no crossing far over the midline, no thigh above the head
+    let tx=kn.x-hip.x,ty=kn.y-hip.y,tz=kn.z-hip.z;const tl=Math.hypot(tx,ty,tz)||1e-6;tx/=tl;ty/=tl;tz/=tl;
+    let f=tx*fx+ty*fy+tz*fz,dn=-(tx*ux+ty*uy+tz*uz),lo=sg*(tx*rx+ty*ry+tz*rz);
+    let fix=false;if(f<-0.5){f=-0.5;fix=true;}if(lo<-0.28){lo=-0.28;fix=true;}if(dn<-0.4){dn=-0.4;fix=true;}
+    if(fix){let nx=fx*f-ux*dn+rx*sg*lo,ny=fy*f-uy*dn+ry*sg*lo,nz=fz*f-uz*dn+rz*sg*lo;const nl=Math.hypot(nx,ny,nz)||1;nx/=nl;ny/=nl;nz/=nl;
+      const k=0.5;kn.x+=(hip.x+nx*tl-kn.x)*k;kn.y+=(hip.y+ny*tl-kn.y)*k;kn.z+=(hip.z+nz*tl-kn.z)*k;tx=nx;ty=ny;tz=nz;}
+    // ---- knee hinge : shin may only fold backwards (more play if the cruciate / collateral ligaments are torn)
+    const lig=Math.min(c.mus[MUS_IDX['acl'+SIDES[s]]],c.mus[MUS_IDX['pcl'+SIDES[s]]],c.mus[MUS_IDX['mcl'+SIDES[s]]]);const tol=lig<40?0.22:0.04;
+    let wx=ft.x-kn.x,wy=ft.y-kn.y,wz=ft.z-kn.z;const wl=Math.hypot(wx,wy,wz)||1e-6;
+    // bend direction d = (-right) x thigh  (points backwards for a standing body)
+    let dx=-(ry*tz-rz*ty),dy=-(rz*tx-rx*tz),dz=-(rx*ty-ry*tx);const dl=Math.hypot(dx,dy,dz);
+    if(dl>0.3){dx/=dl;dy/=dl;dz/=dl;
+      const a=(wx*dx+wy*dy+wz*dz)/wl;if(a<-tol){const m=(-tol-a)*wl;_pushPt(ft,dx,dy,dz,m*0.65);_pushPt(kn,dx,dy,dz,-m*0.35);}
+      // varus / valgus : limited sideways fold
+      let qx=dy*tz-dz*ty,qy=dz*tx-dx*tz,qz=dx*ty-dy*tx;const b=(wx*qx+wy*qy+wz*qz)/wl;const lim=lig<40?0.4:0.18;
+      if(Math.abs(b)>lim){const m=(Math.abs(b)-lim)*wl*Math.sign(b);_pushPt(ft,qx,qy,qz,-m*0.65);_pushPt(kn,qx,qy,qz,m*0.35);}}
+  }
+  if(!self)return;
+  // limbs vs torso capsule (pelvis -> neck)
+  const nk=P[c.neck];
+  const torso=(pi,R)=>{const p=P[pi];const r=pointSeg(p,pel,nk);if(r.d<R&&r.d>1e-5){const q=lerp3(pel,nk,r.t);const m=(R-r.d)/r.d;p.x+=(p.x-q.x)*m;p.y+=(p.y-q.y)*m;p.z+=(p.z-q.z)*m;}};
+  for(const A of c.arms){torso(A.el,0.13);torso(A.fm,0.13);torso(A.ha,0.12);}
+  for(const L of c.legs){torso(L.kn,0.12);torso(L.sm,0.12);torso(L.ft,0.11);}
+  // legs vs each other (thighs and shins)
+  const L0=c.legs[0],L1=c.legs[1];
+  for(const [a0,b0,a1,b1,R] of [[L0.hip,L0.kn,L1.hip,L1.kn,0.15],[L0.kn,L0.ft,L1.kn,L1.ft,0.11]]){
+    const A0=P[a0],B0=P[b0],A1=P[a1],B1=P[b1];const r=segSeg(A0,B0,A1,B1);if(r.d>=R||r.d<1e-5)continue;
+    const p0=lerp3(A0,B0,r.s),p1=lerp3(A1,B1,r.t);const nx=(p0.x-p1.x)/r.d,ny=(p0.y-p1.y)/r.d,nz=(p0.z-p1.z)/r.d,m=(R-r.d)*0.5;
+    _pushPt(B0,nx,ny,nz,m*(0.3+r.s));_pushPt(B1,nx,ny,nz,-m*(0.3+r.t));if(a0!==L0.hip){_pushPt(A0,nx,ny,nz,m*(1.3-r.s));_pushPt(A1,nx,ny,nz,-m*(1.3-r.t));}}
+}
 function nudge(p,t,k,damp){p.x+=(t.x-p.x)*k;p.y+=(t.y-p.y)*k;p.z+=(t.z-p.z)*k;damp=damp||0.85;p.ox=p.x-(p.x-p.ox)*damp;p.oy=p.y-(p.y-p.oy)*damp;p.oz=p.z-(p.z-p.oz)*damp;}
 
 /* ---------- ACTIVE RAGDOLL CONTROL ---------- */

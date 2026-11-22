@@ -486,7 +486,7 @@ let last=0,acc=0,progT=0;
 function loop(t){
   requestAnimationFrame(loop);
   const now=t/1000;const dt=Math.min(0.05,now-last||0);last=now;
-  if(running&&!paused&&player){acc+=dt*TIME_SCALE;let n=0;while(acc>=1/60&&n<3){step(1/60);acc-=1/60;n++;}if(n>=3)acc=0;}
+  if(running&&!paused&&player){acc+=dt*TIME_SCALE;let n=0;while(acc>=1/60&&n<4){step(1/60);acc-=1/60;n++;}if(n>=4)acc=Math.min(acc,1/60);}
   if(player){updateCamera();renderCharacters();}
   updRain(dt);
   renderer.render(scene,camera);drawHUD(dt);
