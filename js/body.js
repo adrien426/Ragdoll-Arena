@@ -199,7 +199,7 @@ function control(c,dt){
   const gh=groundAt(pel.x,pel.z,pel.y-0.45);
   const wl=waterLevel(pel.x,pel.z);
   const footY=Math.min(P[c.legs[0].ft].y,P[c.legs[1].ft].y)-gh;
-  const onGround=footY<0.17||pel.y-gh<0.55;
+  const onGround=footY<0.17||pel.y-gh<0.55;c.onGround=onGround;c.gndY=gh;
   const mv={x:c.input.mx,y:0,z:c.input.mz};
   c.upT=Math.min(1,c.upT+dt*(c.canStand?0.8:0.4));
   const ramp=0.15+0.85*c.upT;
