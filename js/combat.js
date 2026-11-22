@@ -195,7 +195,14 @@ function civilianAI(e,dt){
 function aiTick(e,dt){if(!e.alive)return;e.downT=(!e.conscious||e.tasedT>0)?(e.downT||0)+dt:0;if(e.team===1)hostileAI(e,dt);else civilianAI(e,dt);}
 function separate(){
   for(let i=0;i<chars.length;i++)for(let j=i+1;j<chars.length;j++){const a=chars[i],b=chars[j];if(!a.alive&&!b.alive)continue;
-    if(hdist(a.P[a.pelvis],b.P[b.pelvis])>1.2)continue;
+    const hd=hdist(a.P[a.pelvis],b.P[b.pelvis]);if(hd>2.2)continue;
+    // bodies on the ground (or thrown) collide point against point, so ragdolls pile up instead of merging
+    const down=x=>!x.alive||!x.conscious||!x.canStand||x.stun>0.5;
+    if(down(a)||down(b)){if(Math.abs(a.P[a.pelvis].y-b.P[b.pelvis].y)<2.2){wake(a);
+      for(const pa of a.P)for(const pb of b.P){const dx=pb.x-pa.x,dy=pb.y-pa.y,dz=pb.z-pa.z,R=pa.r+pb.r;if(dx>R||dx<-R||dy>R||dy<-R||dz>R||dz<-R)continue;const d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(d<R&&d>1e-5){const k=(R-d)/d*0.5;pa.x-=dx*k;pa.y-=dy*k;pa.z-=dz*k;pb.x+=dx*k;pb.y+=dy*k;pb.z+=dz*k;}}}
+      continue;}
+    if(hd>1.2)continue;
     for(const ia of [a.pelvis,a.chest])for(const ib of [b.pelvis,b.chest]){const pa=a.P[ia],pb=b.P[ib];const dx=pb.x-pa.x,dz=pb.z-pa.z,dy=pb.y-pa.y;const d=Math.hypot(dx,dz);if(d<0.42&&Math.abs(dy)<0.6&&d>1e-4){const k=(0.42-d)/d*0.25;pa.x-=dx*k;pa.z-=dz*k;pb.x+=dx*k;pb.z+=dz*k;}}}
 }
 
