@@ -74,7 +74,7 @@ function prepModel(kind,gltf){
   // locomotion clips, hips height adapted to this body (authored for a 0.93 m hips height, in place)
   const clips={};if(MODELS.anims)for(const k of ['idle','idleN','walk','run']){const raw=MODELS.anims[k];if(!raw)continue;const cl=THREE.AnimationClip.parse(raw);
     // the hips height is set by the controller : drop the position track so the mixer never fights it
-    cl.tracks=cl.tracks.filter(tr=>!/\.position$/.test(tr.name));
+    cl.tracks=cl.tracks.filter(tr=>!/\.(position|scale)$/.test(tr.name));
     clips[k]=cl;}
   return{kind,scene:sc,bind,map,scale,regs,order,clips,sex:MODEL_FILES[kind]};
 }
@@ -106,7 +106,7 @@ function attachSkin(c){
   const S={root,bones,meshes,M,kind,wq:{},tintK:tint,hash:'',hand:[bones.RightHand,bones.LeftHand],snap:{},snapHips:new THREE.Vector3(),spd:0,anim:false,blendT:1,mixer:null,actions:{},cur:null};
   if(Object.keys(M.clips).length>=3){S.mixer=new THREE.AnimationMixer(root);for(const k in M.clips){const a=S.mixer.clipAction(M.clips[k]);a.setLoop(THREE.LoopRepeat);S.actions[k]=a;}
     S.mixer.timeScale=1;S.phase=Math.random()*5;}
-  c.skin=S;c.modelKind=kind;
+  c.skin=S;c.modelKind=kind;if(c.amp)applyAmpVisual(c);
   if(S.mixer){initCtrl(c);if(ctrlWanted(c)){c.k.mode='ctrl';S.everCtrl=true;S.blendT=9;}}
 }
 function detachSkin(c){if(c.skin){scene.remove(c.skin.root);for(const e of c.skin.meshes)e.m.geometry.dispose();c.skin=null;}}

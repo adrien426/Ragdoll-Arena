@@ -83,7 +83,7 @@ function tapInspect(sx,sy){
 function inspectAim(){if(!player)return;if(aimTarget&&aimTarget.c){openInspect(aimTarget.c);return;}let best=null,bd=6;for(const c of chars){if(c===player)continue;const d=vlen(sub(c.P[c.pelvis],player.P[player.pelvis]));if(d<bd){bd=d;best=c;}}openInspect(best||player);}
 
 /* ---------------- weapons bar ---------------- */
-const wbar=$('weapons');const WSHORT=['Poings','Couteau','Batte','Taser','Pistolet','Katana','Pompe','Molotov','Fusil AR','Sniper','Brique','Grenade'];
+const wbar=$('weapons');const WSHORT=['Poings','Couteau','Batte','Taser','Pistolet','Katana','Pompe','Molotov','Fusil AR','Sniper','Brique','Grenade','Machette','Hache','Marteau','Pied-biche'];
 function buildWeaponBar(){wbar.innerHTML='';WEAPONS.forEach((w,i)=>{const d=document.createElement('div');const lk=!weaponUnlocked(i);d.className='w'+(player&&player.weapon===i?' sel':'')+(lk?' lock':'');d.innerHTML='<b>'+(lk?'🔒':w.icon)+'</b>'+(lk?w.unlock+' kills':WSHORT[i]);d.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();initAudio();selectWeapon(i);});wbar.appendChild(d);});}
 function selectWeapon(i){if(!player||i<0||i>=WEAPONS.length||!weaponUnlocked(i))return;player.weapon=i;player.swing=-1;player.cd=0.25;player.reloadT=0;buildWeaponBar();}
 
@@ -467,7 +467,7 @@ function step(dt){
   for(const e of chars)if(e!==player)aiTick(e,dt);
   for(const c of chars){physics(c);control(c,dt);attackLogic(c,dt);burnTick(c,dt);}
   separate();updProjectiles(dt);updFires(dt);updEvents(dt);
-  for(const c of chars)if(c.skin)animStep(c,dt);
+  for(const c of chars){if(c.skin)animStep(c,dt);bloodTick(c,dt);}
   physAcc+=dt;if(physAcc>=0.05){for(const c of chars){physiology(c,physAcc);speakTick(c);}physAcc=0;}
   progT-=dt;if(progT<=0){progT=0.5;for(const c of chars){c._prog=prognosis(c);c._ps=survival(c).ps;c._ps0=noCare(c,c._prog,c._ps);}}
   updParticles(dt);updSprites(dt);updLines(dt);

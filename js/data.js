@@ -20,13 +20,17 @@ const WEAPONS=[
   {id:'bat',name:'Batte',icon:'🏏',type:'melee',kind:'blunt',dmg:30,reach:0.55,cd:0.68,imp:0.045,unlock:2,len:0.82},
   {id:'taser',name:'Taser',icon:'⚡',type:'taser',kind:'taser',dmg:4,cd:1.2,range:7,imp:0.004,unlock:4,len:0.18,mag:1,reload:2.2},
   {id:'pistol',name:'Pistolet 9 mm',icon:'🔫',type:'gun',kind:'bullet',dmg:30,energy:1,cd:0.28,spread:0.012,imp:0.02,unlock:6,len:0.2,pellets:1,mag:15,reload:1.7},
-  {id:'katana',name:'Katana',icon:'🗡️',type:'melee',kind:'slash',dmg:40,reach:0.78,cd:0.58,imp:0.02,unlock:9,len:0.95,depth:0.075},
+  {id:'katana',name:'Katana',icon:'🗡️',type:'melee',kind:'slash',dmg:40,reach:0.78,cd:0.58,imp:0.02,unlock:9,len:0.95,depth:0.075,sever:0.25},
   {id:'shotgun',name:'Fusil à pompe',icon:'💥',type:'gun',kind:'bullet',dmg:13,energy:0.4,cd:0.95,spread:0.06,imp:0.012,unlock:13,len:0.85,pellets:9,two:true,mag:6,reload:3.2},
   {id:'molotov',name:'Cocktail Molotov',icon:'🍾',type:'throw',kind:'fire',dmg:0,cd:1.1,unlock:17,len:0.22,mag:1,reload:0.9},
   {id:'rifle',name:"Fusil d'assaut",icon:'🎖️',type:'gun',kind:'bullet',dmg:30,energy:2.2,cd:0.1,spread:0.018,imp:0.02,unlock:22,len:0.85,pellets:1,auto:true,two:true,mag:30,reload:2.5,cavity:0.025},
   {id:'sniper',name:'Sniper',icon:'🎯',type:'gun',kind:'bullet',dmg:90,energy:4,cd:1.4,spread:0.0012,imp:0.06,unlock:30,len:1.15,pellets:1,two:true,mag:5,reload:3.0,cavity:0.045},
   {id:'brick',name:'Brique',icon:'🧱',type:'throw',kind:'brick',dmg:26,cd:0.9,unlock:1,len:0.12,mag:1,reload:0.5},
   {id:'grenade',name:'Grenade',icon:'💣',type:'throw',kind:'explosive',dmg:0,cd:1.2,unlock:26,len:0.08,mag:1,reload:1.2},
+  {id:'machete',name:'Machette',icon:'🔪',type:'melee',kind:'slash',dmg:34,reach:0.6,cd:0.52,imp:0.018,unlock:3,len:0.6,depth:0.06,sever:0.16},
+  {id:'axe',name:'Hache',icon:'🪓',type:'melee',kind:'slash',dmg:52,reach:0.62,cd:0.95,imp:0.035,unlock:8,len:0.72,depth:0.09,sever:0.3},
+  {id:'hammer',name:'Marteau',icon:'🔨',type:'melee',kind:'blunt',dmg:34,reach:0.3,cd:0.6,imp:0.02,unlock:2,len:0.33,focal:true},
+  {id:'crowbar',name:'Pied-de-biche',icon:'🔧',type:'melee',kind:'blunt',dmg:36,reach:0.55,cd:0.7,imp:0.035,unlock:5,len:0.6},
 ];
 
 /* ---------------- MEDICAL ITEMS ---------------- */

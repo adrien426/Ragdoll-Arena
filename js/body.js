@@ -348,7 +348,7 @@ function renderCharacters(){
     // weapon
     if(c.wm){for(const g of c.wm)if(g)g.visible=false;
       const w=WEAPONS[c.weapon],g=c.wm[c.weapon];
-      if(g&&c.alive&&c.useArm>=0&&w.len>0&&c.reloadT<=0&&!c.crawling){if(!g.userData.real&&!g.userData.tried&&PROPS.ready){g.userData.tried=true;realWeapon(g,w);}g.visible=true;const h=(c.skin&&skinHand(c,c.useArm))||P[c.arms[c.useArm].ha];g.position.set(h.x,h.y,h.z);const wd=(c.skin&&skinWeaponDir(c,c.useArm))||c.wDir;_v.set(wd.x,wd.y,wd.z).normalize();g.quaternion.setFromUnitVectors(ZA,_v);}}
+      if(g&&c.alive&&c.useArm>=0&&w.len>0&&c.reloadT<=0&&!c.crawling&&!(c.amp&&(c.amp['hand'+(c.useArm?'L':'R')]))){if(!g.userData.real&&!g.userData.tried&&PROPS.ready){g.userData.tried=true;realWeapon(g,w);}g.visible=true;const h=(c.skin&&skinHand(c,c.useArm))||P[c.arms[c.useArm].ha];g.position.set(h.x,h.y,h.z);const wd=(c.skin&&skinWeaponDir(c,c.useArm))||c.wDir;_v.set(wd.x,wd.y,wd.z).normalize();g.quaternion.setFromUnitVectors(ZA,_v);}}
   }
   POOL.cyl.count=ci;POOL.sph.count=si;POOL.box.count=bi;POOL.hair.count=hi;POOL.eye.count=ei;POOL.wound.count=wi;POOL.shard.count=di;
   for(const k in POOL){const m=POOL[k];m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;}

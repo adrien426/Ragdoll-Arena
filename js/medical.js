@@ -623,6 +623,7 @@ function plainProblems(c){const L=[];
   if(c.intBleed>1)L.push('🩸 Saigne à l\'intérieur ('+c.intBleed.toFixed(0)+' ml/s) : '+Object.keys(c.intB).filter(k=>{const b=c.intB[k];return!(b.cap&&b.lost>=b.cap);}).map(k=>c.intB[k].name).join(', '));
   if(c.extBleed>0.5&&!c.wounds.some(w=>w.art>0.3&&w.cur>0.03))L.push('🩸 Saigne ('+c.extBleed.toFixed(1)+' ml/s)');
   if(c.lossF>0.1)L.push('💧 A perdu '+(Math.round(c.bloodMax-c.blood)/1000).toFixed(2)+' L de sang sur '+(c.bloodMax/1000).toFixed(1)+' L ('+Math.round(c.lossF*100)+' %)');
+  if(c.amp)for(const r in c.amp){const a=ampSeg(r);if(a&&!c.amp[(a.seg==='larm'?'uarm':a.seg==='shin'?'thigh':a.seg==='hand'?'larm':a.seg==='foot'?'shin':'_')+a.S])L.unshift('✂️ Amputé : '+AMP[a.seg].n+' '+(a.S==='R'?'droit':'gauche'));}
   if(c.lungWater>30)L.push('🌊 Eau dans les poumons : ~'+Math.round(c.lungWater/2)+' ml (noyade)');
   if(c.gasDose>0.5)L.push('☠️ A respiré un gaz toxique : poumons brûlés');
   if(c.inhal>0.2)L.push('🔥 Voies respiratoires brûlées (fumée, flammes)');
@@ -631,7 +632,7 @@ function plainProblems(c){const L=[];
   const brn=REG_KEYS.filter(r=>c.burn[r].deg>0);if(brn.length)L.push('🔥 Brûlé à '+Math.round(c.tbsa)+' % : '+brn.map(r=>REGIONS[r].n+' ('+c.burn[r].deg+'e°)').join(', '));
   if(c.elec)L.push('⚡ Foudroyé / électrocuté');
   if(c.tetra)L.push('♿ Ne peut plus bouger bras et jambes (moelle du cou)');else if(c.para)L.push('♿ Ne peut plus bouger les jambes (moelle épinière)');
-  const fr=[];for(let i=0;i<BONES.length;i++)if(c.boneSt[i]>=2)fr.push(BONES[i].name);if(fr.length)L.push('🦴 '+fr.length+' os cassé(s) : '+fr.slice(0,5).join(', ')+(fr.length>5?'…':''));
+  const fr=[];for(let i=0;i<BONES.length;i++)if(c.boneSt[i]>=2&&!(c.amp&&c.amp[BONES[i].region]))fr.push(BONES[i].name);if(fr.length)L.push('🦴 '+fr.length+' os cassé(s) : '+fr.slice(0,5).join(', ')+(fr.length>5?'…':''));
   const lig=MUSCLES.filter(m=>isLig(m.key)&&c.mus[m.id]<75);if(lig.length)L.push('🦵 Ligaments : '+lig.map(m=>m.name+' ('+muscleStatus(c.mus[m.id],m.key)[0].toLowerCase()+')').join(', '));
   const nv=ORGANS.filter(o=>o.nerve&&c.org[o.id]<70);if(nv.length)L.push('⚡ Nerfs touchés : '+nv.map(o=>o.name+' → '+o.role).join(' ; '));
   const ms=MUSCLES.filter(m=>!isLig(m.key)&&c.mus[m.id]<60);if(ms.length)L.push('💪 Muscles déchirés : '+ms.slice(0,4).map(m=>m.name).join(', ')+(ms.length>4?'…':''));
@@ -686,7 +687,7 @@ function hitZone(c,reg,point){
   if(reg.startsWith('shin')&&l.tr>0.85)return{k:'ankle',n:'Cheville '+DG(S),s:S};
   return{k:'limb',n:R?R.n:reg,s:S};
 }
-function hitVerb(w){return w.id==='fists'?'👊 Coup de poing':w.id==='bat'?'🏏 Coup de batte':w.id==='knife'?'🔪 Coup de couteau':w.id==='katana'?'🗡️ Coup de sabre':w.id==='brick'?'🧱 Brique':w.id==='frag'?'💥 Éclat':w.kind==='taser'?'⚡ Taser':w.kind==='bullet'?(w.pellets>1?'💥 Plombs':'🔫 Balle'):'💢 Choc';}
+function hitVerb(w){return w.id==='machete'?'🔪 Coup de machette':w.id==='axe'?'🪓 Coup de hache':w.id==='hammer'?'🔨 Coup de marteau':w.id==='crowbar'?'🔧 Coup de pied-de-biche':w.id==='fists'?'👊 Coup de poing':w.id==='bat'?'🏏 Coup de batte':w.id==='knife'?'🔪 Coup de couteau':w.id==='katana'?'🗡️ Coup de sabre':w.id==='brick'?'🧱 Brique':w.id==='frag'?'💥 Éclat':w.kind==='taser'?'⚡ Taser':w.kind==='bullet'?(w.pellets>1?'💥 Plombs':'🔫 Balle'):'💢 Choc';}
 function bluntZone(c,z,d,inj,point){
   const B=(k,m)=>{if(BONE_IDX[k]!==undefined)boneDamage(c,BONE_IDX[k],d*m,false,inj);},O=(k,m,kind)=>organDamage(c,ORG[k],d*m,kind||'blunt',inj),Mu=(k,m)=>muscleDamage(c,MUS_IDX[k],d*m,inj);
   const st=t=>{c.stun=Math.max(c.stun,t);};
