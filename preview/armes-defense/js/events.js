@@ -91,7 +91,7 @@ function ballistic(a,b,vmax){let d=sub(b,a);let D=Math.hypot(d.x,d.z);const maxD
   const tf=clamp(D/(vmax*0.75),0.25,2.2);const vy=(d.y+0.5*9.8*tf*tf)/tf;return{x:d.x/tf/60,y:vy/60,z:d.z/tf/60};}
 // called from combat.js when a throw weapon is released
 function releaseThrow(c){const w=WEAPONS[c.weapon];if(w.kind==='fire'){releaseMolotov(c);return;}
-  const h=c.P[c.arms[c.useArm].ha];const v=ballistic(h,c.aimP,w.kind==='brick'?16:12);
+  const h=c.P[c.arms[Math.max(0,c.useArm)].ha];const v=ballistic(h,c.aimP,w.kind==='brick'?16:12);
   if(w.kind==='brick'){throwDebris(h,v,'brick',c);PROJ[PROJ.length-1].dmgK=1;}
   else{const mesh=new THREE.Mesh(GREN_GEO,M.grenade);mesh.castShadow=true;scene.add(mesh);PROJ.push({p:{x:h.x,y:h.y,z:h.z},v,owner:c,mesh,life:3.2,kind:'explosive'});SFX.click();}
   sfxAt(h);SFX.swing();}
@@ -100,7 +100,7 @@ function projHitChar(q,a,b){for(const c of chars){if(c===q.owner&&q.age<0.4)cont
 function updThrown(q,dt,i){
   q.age=(q.age||0)+dt;q.v.y-=G;const np=add(q.p,q.v);const spd=vlen(q.v)*60;
   if(q.kind==='brick'){
-    if(spd>3){const hit=projHitChar(q,q.p,np);if(hit){const dir=norm(q.v);applyHit(hit.c,hit.h.hi,hit.h.t,hit.pt,dir,{kind:'blunt',dmg:(4+spd*1.7)*(q.dmgK||1),imp:clamp(spd*0.0025,0.005,0.06),id:'brick'},q.owner);
+    if(spd>3&&!q.limb){const hit=projHitChar(q,q.p,np);if(hit){const dir=norm(q.v);applyHit(hit.c,hit.h.hi,hit.h.t,hit.pt,dir,{kind:'blunt',dmg:(4+spd*1.7)*(q.dmgK||1),imp:clamp(spd*0.0025,0.005,0.06),id:'brick'},q.owner);
       q.v=mul(q.v,-0.15);sfxAt(np);SFX.blunt();}}
     const gy=groundAt(np.x,np.z,np.y+0.3);
     if(np.y<=gy+0.04||insideBox(np.x,np.y,np.z,0)){if(insideBox(np.x,np.y,np.z,0)){q.v.x*=-0.3;q.v.z*=-0.3;}
@@ -118,7 +118,7 @@ function updThrown(q,dt,i){
 }
 
 /* ---------------- vehicles ---------------- */
-function buildCarMesh(paint){const g=new THREE.Group();const m=CAR_PAINT[paint%CAR_PAINT.length];
+function buildCarMesh(paint){if(PROPS.ready){const m=carModel();if(m)return m;}const g=new THREE.Group();const m=CAR_PAINT[paint%CAR_PAINT.length];
   const ad=(geo,mat,x,y,z)=>{const me=new THREE.Mesh(geo,mat);me.position.set(x,y,z);me.castShadow=true;g.add(me);return me;};
   ad(new THREE.BoxGeometry(4.3,0.72,1.8),m,0,0.62,0);ad(new THREE.BoxGeometry(2.2,0.6,1.62),m,-0.25,1.27,0);
   ad(new THREE.BoxGeometry(2.05,0.5,1.66),M.glass,-0.25,1.25,0);ad(new THREE.BoxGeometry(0.06,0.16,1.4),M.lampHead,2.16,0.72,0);
@@ -230,14 +230,14 @@ function updTornados(dt){for(let i=TORNADOS.length-1;i>=0;i--){const T=TORNADOS[
   if(T.t<=0){scene.remove(T.mesh);TORNADOS.splice(i,1);}}}
 
 /* ---------------- flood ---------------- */
-function flood(t){const gy=groundAt(t.x,t.z,t.y+2);FLOOD.target=gy+2.4;if(FLOOD.level<gy-1)FLOOD.level=gy-1;FLOOD.t=70;const a=rnd(0,6.28);FLOOD.flow={x:Math.cos(a),z:Math.sin(a)};
+function flood(t,big){const gy=groundAt(t.x,t.z,t.y+2);FLOOD.target=gy+(big?4.5:2.4);FLOOD.rate=big?1.6:0.22;FLOOD.force=big?0.0055:0.0011;if(FLOOD.level<gy-1)FLOOD.level=gy-1;FLOOD.t=70;const a=rnd(0,6.28);FLOOD.flow={x:Math.cos(a),z:Math.sin(a)};
   if(!FLOOD.mesh){const tx=T.water.clone();tx.needsUpdate=true;tx.repeat.set(70,70);FLOOD.mesh=new THREE.Mesh(new THREE.PlaneGeometry(900,900),std({map:tx,color:0x6f7d6a,metalness:0.2,roughness:0.15,transparent:true,opacity:0.88}));FLOOD.mesh.rotation.x=-Math.PI/2;scene.add(FLOOD.mesh);}
   FLOOD.mesh.visible=true;showMsg('🌊 Inondation ! Montez en hauteur !',2.5);SFX.splash();}
 function updFlood(dt){if(FLOOD.t<=0&&FLOOD.level<-1e8)return;
-  FLOOD.t-=dt;const goal=FLOOD.t>0?FLOOD.target:FLOOD.target-6;FLOOD.level+=clamp(goal-FLOOD.level,-0.12*dt,0.22*dt);
+  FLOOD.t-=dt;const goal=FLOOD.t>0?FLOOD.target:FLOOD.target-6;FLOOD.level+=clamp(goal-FLOOD.level,-0.12*dt,(FLOOD.rate||0.22)*dt);
   if(FLOOD.t<=0&&FLOOD.level<=FLOOD.target-5.9){FLOOD.level=-1e9;if(FLOOD.mesh)FLOOD.mesh.visible=false;return;}
   if(FLOOD.mesh){FLOOD.mesh.position.set(camera.position.x,FLOOD.level,camera.position.z);if(FLOOD.mesh.material.map)FLOOD.mesh.material.map.offset.set(GT*0.02*FLOOD.flow.x,GT*0.02*FLOOD.flow.z);}
-  for(const c of chars){const pp=c.P[c.pelvis];if(pp.y>FLOOD.level)continue;const depth=FLOOD.level-pp.y;const k=clamp(depth/1.2,0,1)*0.0011;
+  for(const c of chars){const pp=c.P[c.pelvis];if(pp.y>FLOOD.level)continue;const depth=FLOOD.level-pp.y;const k=clamp(depth/1.2,0,1)*(FLOOD.force||0.0011);
     for(const p of c.P){if(p.y<FLOOD.level){p.ox-=FLOOD.flow.x*k;p.oz-=FLOOD.flow.z*k;}}
     if(c.alive&&c.conscious&&depth>0.7)say(c,'drown');}}
 
@@ -287,6 +287,9 @@ const CATAS=[
   {k:'carfast',icon:'🏎️',n:'Voiture à 130 km/h',d:'Choc très violent',f:t=>spawnVehicle(t,130)},
   {k:'bolt',icon:'⚡',n:'Foudre',d:'Arrêt cardiaque, brûlures entrée/sortie, tympans',f:t=>lightning(t)},
   {k:'grenade',icon:'💥',n:'Explosion',d:'Souffle : tympans, poumons, éclats, projection',f:t=>explode(add(t,{x:0,y:0.3,z:0}),1.3,player,{})},
+  {k:'plane',icon:'✈️',n:"Crash d'avion",d:'Un avion s\'écrase : explosions, kérosène en feu, débris',f:t=>planeCrash(t)},
+  {k:'collapse',icon:'🏢',n:"Effondrement d'immeuble",d:'Le bâtiment le plus proche s\'écroule : gravats, poussière',f:t=>buildingCollapse(t)},
+  {k:'tsunami',icon:'🌊',n:'Tsunami',d:'Une vague de 4,5 m déferle et emporte tout',f:t=>{flood(t,true);showMsg('🌊 TSUNAMI !',2.5);SHAKE=Math.max(SHAKE,0.6);}},
   {k:'tornado',icon:'🌪️',n:'Tornade',d:'Aspire et projette les gens, débris',f:t=>tornado(t)},
   {k:'flood',icon:'🌊',n:'Inondation',d:"L'eau monte de 2,4 m : noyade, hypothermie",f:t=>flood(t)},
   {k:'quake',icon:'🏚️',n:'Séisme',d:'Le sol tremble, chutes de briques et de verre',f:()=>earthquake()},
@@ -305,13 +308,38 @@ function catTarget(){const p=player.aimP||player.P[player.head];return{x:p.x,y:g
 
 function updEvents(dt){
   for(const c of chars)swimTick(c,dt);
-  updMeteors(dt);updVehicles(dt);updTornados(dt);updFlood(dt);updQuake(dt);updGases(dt);updWave(dt);
+  updMeteors(dt);updPlanes(dt);updVehicles(dt);updTornados(dt);updFlood(dt);updQuake(dt);updGases(dt);updWave(dt);
   for(let i=BOLTS.length-1;i>=0;i--){const b=BOLTS[i];b.t-=dt;b.m.visible=b.t>0.45||Math.random()<0.6;if(b.t<=0){scene.remove(b.m);for(const ch of b.m.children)ch.geometry.dispose();BOLTS.splice(i,1);}}
   SHAKE=Math.max(0,SHAKE-dt*1.6);FLASH=Math.max(0,FLASH-dt*2.5);
 }
 function resetEvents(){
-  for(const m of METEORS)scene.remove(m.mesh);METEORS.length=0;for(const v of VEHICLES)scene.remove(v.mesh);VEHICLES.length=0;for(const t of TORNADOS)scene.remove(t.mesh);TORNADOS.length=0;
+  for(const m of METEORS)scene.remove(m.mesh);METEORS.length=0;for(const P of PLANES)scene.remove(P.g);PLANES.length=0;for(const v of VEHICLES)scene.remove(v.mesh);VEHICLES.length=0;for(const t of TORNADOS)scene.remove(t.mesh);TORNADOS.length=0;
   for(const m of DEBRIS)scene.remove(m);DEBRIS.length=0;for(const m of SCORCH)scene.remove(m);SCORCH.length=0;for(const b of BOLTS)scene.remove(b.m);BOLTS.length=0;GASES.length=0;
   FLOOD.level=-1e9;FLOOD.t=0;if(FLOOD.mesh)FLOOD.mesh.visible=false;QUAKE=0;SHAKE=0;FLASH=0;TIME_SCALE=1;
   if(WAVE.kind){SET.temp=WAVE.prevTemp;SET.rain=WAVE.prevRain;WAVE.kind=null;}
 }
+
+/* ---------- plane crash & building collapse ---------- */
+const PLANES=[];
+function planeCrash(t){const g=new THREE.Group();const white=std({color:0xe8ecef,metalness:0.3,roughness:0.4}),blue=std({color:0x1e3f8f,roughness:0.5});
+  const add_=(geo,m,x,y,z,rx,ry,rz)=>{const me=new THREE.Mesh(geo,m);me.position.set(x,y,z);me.rotation.set(rx||0,ry||0,rz||0);me.castShadow=true;g.add(me);};
+  add_(new THREE.CylinderGeometry(1.5,1.5,24,16),white,0,0,0,Math.PI/2);add_(new THREE.SphereGeometry(1.5,16,10),white,0,0,12);add_(new THREE.ConeGeometry(1.5,5,16),white,0,0,-14.5,-Math.PI/2);
+  add_(new THREE.BoxGeometry(30,0.35,4),white,0,-0.6,0.5);add_(new THREE.BoxGeometry(10,0.3,2.2),white,0,0.5,-14);add_(new THREE.BoxGeometry(0.3,5,3),blue,0,2.6,-14.5);
+  for(const x of [-6,6])add_(new THREE.CylinderGeometry(0.75,0.75,3.2,12),blue,x,-1.4,1.5,Math.PI/2);
+  add_(new THREE.BoxGeometry(3.05,0.5,22),blue,0,0.3,0);
+  const a=rnd(0,6.28);const st={x:t.x+Math.cos(a)*260,y:t.y+110,z:t.z+Math.sin(a)*260};g.position.set(st.x,st.y,st.z);g.lookAt(t.x,t.y,t.z);scene.add(g);
+  PLANES.push({g,from:st,to:{x:t.x,y:t.y+1,z:t.z},T:4.5,age:0});showMsg("✈️ Un avion tombe !",2.5);SFX.whoosh();}
+function updPlanes(dt){for(let i=PLANES.length-1;i>=0;i--){const P=PLANES[i];P.age+=dt;const k=Math.min(1,P.age/P.T);const p=lerp3(P.from,P.to,k);P.g.position.set(p.x,p.y,p.z);P.g.rotateZ(dt*0.35);
+  emitSmoke(p.x,p.y,p.z,0.15,rnd(4,7),0.004,null,0.02);if(Math.random()<0.6)emitFlame(p.x+rnd(-2,2),p.y,p.z+rnd(-2,2),2.5);
+  if(hdist(p,camera.position)<160){SHAKE=Math.max(SHAKE,0.15+k*0.4);if(Math.random()<dt*3){sfxAt(p);SFX.whoosh();}}
+  if(k>=1){scene.remove(P.g);PLANES.splice(i,1);const t=P.to;explode(t,6,null,{fire:true});
+    for(let j=0;j<3;j++)setTimeout(()=>{const q={x:t.x+rnd(-12,12),y:t.y,z:t.z+rnd(-12,12)};q.y=groundAt(q.x,q.z,t.y+5)+0.5;explode(q,2.2,null,{fire:true});},700+j*900);
+    for(let j=0;j<10;j++){const x=t.x+rnd(-18,18),z=t.z+rnd(-18,18),y=groundAt(x,z,t.y+5);if(waterLevel(x,z)<y)FIRES.push({x,y:y+0.05,z,r:rnd(1.8,3.2),life:rnd(40,70),max:70});}
+    for(let j=0;j<40;j++)throwDebris(add(t,{x:0,y:1.5,z:0}),{x:rnd(-0.4,0.4),y:rnd(0.15,0.5),z:rnd(-0.4,0.4)},'rock');}}}
+function buildingCollapse(t){const B=boxesNear(t.x,t.z,45).filter(b=>b.max.y-b.min.y>8&&b.hx>2&&b.hz>2);if(!B.length){showMsg('Aucun immeuble assez proche',1.5);return;}
+  const b=B.reduce((a,c)=>hdist({x:c.cx,z:c.cz},t)<hdist({x:a.cx,z:a.cz},t)?c:a);showMsg("🏢 L'immeuble s'effondre !",2.5);SFX.big();
+  let n=0;const tick=()=>{if(n++>40)return;SHAKE=Math.max(SHAKE,0.8);sfxAt({x:b.cx,y:b.max.y,z:b.cz});if(n%4===0)SFX.thud();
+    for(let i=0;i<5;i++){const side=rndi(0,3);let x=rnd(b.min.x,b.max.x),z=rnd(b.min.z,b.max.z);if(side===0)x=b.min.x-0.3;else if(side===1)x=b.max.x+0.3;else if(side===2)z=b.min.z-0.3;else z=b.max.z+0.3;
+      const out={x:side===0?-1:side===1?1:0,z:side===2?-1:side===3?1:0};throwDebris({x,y:rnd(b.min.y+4,b.max.y),z},{x:out.x*rnd(0.02,0.09),y:rnd(0,0.03),z:out.z*rnd(0.02,0.09)},Math.random()<0.6?'brick':'rock');}
+    for(let i=0;i<10;i++)emitSmoke(rnd(b.min.x-3,b.max.x+3),b.min.y+rnd(0,6),rnd(b.min.z-3,b.max.z+3),0.45,rnd(5,9),rnd(0.005,0.02),null,0.03);
+    setTimeout(tick,100);};tick();}
