@@ -63,8 +63,12 @@ bindBtn('inspBtn',v=>{if(v)inspectAim();});
 let lastTarget=null,lastTargetT=-99;
 bindBtn('tgtBtn',v=>{if(v&&lastTarget){openInspect(lastTarget);inspView='mus';document.querySelectorAll('#iViews button').forEach(x=>x.classList.toggle('on',x.dataset.v==='mus'));drawInspect();}});bindBtn('setBtn',v=>{if(v)openSettings();});
 bindBtn('catBtn',v=>{if(v)openCat();});
-// 🎲 : a random disaster somewhere around you (never the sandbox tools)
-bindBtn('rndBtn',v=>{if(v)randomEvent();});
+// 🎲 : a random weapon in your hands (only unlocked ones in PvP)
+bindBtn('rndBtn',v=>{if(v)randomWeapon();});
+function randomWeapon(){if(!player||!running||paused||!player.alive)return;initAudio();
+  const ok=WEAPONS.map((w,i)=>i).filter(i=>i!==player.weapon&&weaponUnlocked(i));if(!ok.length){addFeed('🎲 Aucune autre arme débloquée',1);return;}
+  const i=pick(ok);selectWeapon(i);const w=WEAPONS[i];if(w.mag)player.ammo[i]=w.mag;addFeed('🎲 Arme au hasard : '+w.icon+' '+w.name,2);showMsg(w.icon+' '+w.name,1.2);}
+// random disaster somewhere around you (from the ☄️ menu)
 function randomEvent(){if(!player||!running||paused)return;initAudio();
   const pool=CATAS.filter(e=>!['tp','roof','throw','people','slow','random'].includes(e.k));const e=pick(pool);
   const p=player.P[player.pelvis];let t=null;for(let i=0;i<20&&!t;i++){const a=rnd(0,6.28),d=rnd(6,18);const x=p.x+Math.sin(a)*d,z=p.z+Math.cos(a)*d;const y=groundAt(x,z,p.y+3);if(Math.abs(y-p.y)<4&&!insideBox(x,y+0.5,z,0.3))t={x,y,z};}
