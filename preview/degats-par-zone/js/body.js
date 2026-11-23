@@ -63,7 +63,7 @@ function buildDrawLists(c){
 }
 function buildWeaponMeshes(c,all){
   const g=new THREE.Group();scene.add(g);c.wg=g;c.wm=[];
-  WEAPONS.forEach((w,i)=>{if(!all&&!(c.team===1&&i===c.weapon)){c.wm.push(null);return;}const wg=new THREE.Group();wg.visible=false;g.add(wg);buildWeapon(wg,w);c.wm.push(wg);});
+  WEAPONS.forEach((w,i)=>{if(!all&&!(c.team===1&&i===c.weapon)){c.wm.push(null);return;}const wg=new THREE.Group();wg.visible=false;g.add(wg);if(!(typeof PROPS!=='undefined'&&PROPS.ready&&realWeapon(wg,w)))buildWeapon(wg,w);else wg.userData.tried=true;c.wm.push(wg);});
 }
 function buildWeapon(wg,w){
   const ad=(geo,m,x,y,z,rx)=>{const me=new THREE.Mesh(geo,m);me.position.set(x,y,z);if(rx)me.rotation.x=rx;me.castShadow=true;wg.add(me);};
@@ -142,7 +142,7 @@ function physics(c){
   // safety net : a single non-finite value would spread to the whole body, restore the last good pose instead
   if(!Number.isFinite(P[c.pelvis].x+P[c.pelvis].y+P[c.pelvis].z+P[c.head].y)){if(c._safe){for(let i=0;i<P.length;i++){const q=c._safe[i];Object.assign(P[i],{x:q[0],y:q[1],z:q[2],ox:q[0],oy:q[1],oz:q[2]});}}return;}
   if(!c._safeT||GT-c._safeT>0.5){c._safeT=GT;c._safe=P.map(p=>[p.x,p.y,p.z]);}
-  if(minVy<-0.108&&impP>=0&&avgVy<-0.09)fallInjury(c,impP,-Math.max(minVy,avgVy*1.1)*60);
+  if(minVy<-0.108&&impP>=0&&avgVy<-0.09&&!(c.k&&c.k.mode==='ctrl'))fallInjury(c,impP,-Math.max(minVy,avgVy*1.1)*60);
   if(!c.alive){let mv=0;for(const p of P){const v=Math.abs(p.x-p.ox)+Math.abs(p.y-p.oy)+Math.abs(p.z-p.oz);if(v>mv)mv=v;}c.sleep=mv<0.0009?c.sleep+1:0;}
   c.inWater=pel.y<wl;const hd=P[c.head];const hu=norm(sub(hd,P[c.neck]));const hr=orthoN(sub(P[c.sh[0]],P[c.sh[1]]),hu);const hf=cross(hu,hr);const mo={x:hd.x+hf.x*0.085-hu.x*0.045,y:hd.y+hf.y*0.085-hu.y*0.045,z:hd.z+hf.z*0.085-hu.z*0.045};c.mouth=mo;c.headUnder=mo.y<waterLevel(mo.x,mo.z)-0.005;
 }
@@ -196,6 +196,8 @@ function control(c,dt){
   const conscious=c.alive&&c.conscious&&!c.arrest;
   if(!conscious||c.stun>0||c.tetra){c.upT=0;if(conscious&&c.tetra)c.crawling=false;return;}
   const f={x:Math.sin(c.yaw),y:0,z:Math.cos(c.yaw)},R={x:-Math.cos(c.yaw),y:0,z:Math.sin(c.yaw)};
+  // kinematic character controller (animated body) : move the capsule, the arms still aim physically
+  if(c.k&&c.k.mode==='ctrl'){if(c.input.attack)c._aimT=GT+0.8;ctrlMove(c,dt);c.crawling=false;armControl(c,f,R,1,!c.k.grounded);return;}
   const gh=groundAt(pel.x,pel.z,pel.y-0.45);
   const wl=waterLevel(pel.x,pel.z);
   const footY=Math.min(P[c.legs[0].ft].y,P[c.legs[1].ft].y)-gh;
@@ -209,6 +211,8 @@ function control(c,dt){
     if(sk>0.2&&Math.random()<0.25)spasm(c,0.006*sk);
     if(mv.x||mv.z){for(const i of [c.chest,c.neck,c.head,c.pelvis]){P[i].x+=mv.x*0.012;P[i].z+=mv.z*0.012;}}
     c.wet=1;
+  }else if(c.canStand&&c.k&&hasCtrl(c)){
+    // animated characters never try to balance the ragdoll : they lie still until the controller takes them back
   }else if(c.canStand){
     const lf=c.legFn,sup=c.support,pain=c.painEff;
     const standH=gh+0.95-(1-sup)*0.14-pain*0.0005;
@@ -344,7 +348,7 @@ function renderCharacters(){
     // weapon
     if(c.wm){for(const g of c.wm)if(g)g.visible=false;
       const w=WEAPONS[c.weapon],g=c.wm[c.weapon];
-      if(g&&c.alive&&c.useArm>=0&&w.len>0&&c.reloadT<=0&&!c.crawling){g.visible=true;const h=(c.skin&&skinHand(c,c.useArm))||P[c.arms[c.useArm].ha];g.position.set(h.x,h.y,h.z);_v.set(c.wDir.x,c.wDir.y,c.wDir.z).normalize();g.quaternion.setFromUnitVectors(ZA,_v);}}
+      if(g&&c.alive&&c.useArm>=0&&w.len>0&&c.reloadT<=0&&!c.crawling){if(!g.userData.real&&!g.userData.tried&&PROPS.ready){g.userData.tried=true;realWeapon(g,w);}g.visible=true;const h=(c.skin&&skinHand(c,c.useArm))||P[c.arms[c.useArm].ha];g.position.set(h.x,h.y,h.z);const wd=(c.skin&&skinWeaponDir(c,c.useArm))||c.wDir;_v.set(wd.x,wd.y,wd.z).normalize();g.quaternion.setFromUnitVectors(ZA,_v);}}
   }
   POOL.cyl.count=ci;POOL.sph.count=si;POOL.box.count=bi;POOL.hair.count=hi;POOL.eye.count=ei;POOL.wound.count=wi;POOL.shard.count=di;
   for(const k in POOL){const m=POOL[k];m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;}
