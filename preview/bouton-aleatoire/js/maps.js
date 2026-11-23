@@ -218,8 +218,10 @@ function buildDark(){
 }
 
 function buildMap(){clearMap();if(SET.map==='dark')buildDark();else buildLux();}
-function spawnPoint(near,rmin,rmax,sameLevel){
+function spawnPoint(near,rmin,rmax,sameLevel,hidden){
   for(let i=0;i<60;i++){const a=Math.random()*Math.PI*2,d=rnd(rmin,rmax);const x=near.x+Math.sin(a)*d,z=near.z+Math.cos(a)*d;const bnd=MAP.bounds;
+    // appear where the camera is not looking (nobody pops into view)
+    if(hidden&&typeof camDir!=='undefined'&&i<45){const vx=x-camera.position.x,vz=z-camera.position.z,vl=Math.hypot(vx,vz)||1;if((vx*camDir.x+vz*camDir.z)/(vl*Math.hypot(camDir.x,camDir.z)||1)>0.2)continue;}
     if(x<bnd[0]||x>bnd[2]||z<bnd[1]||z>bnd[3])continue;
     const gy=groundAt(x,z,60);if(insideBox(x,gy+0.6,z,0.5))continue;if(gy-terrainH(x,z)>0.6)continue;
     if(sameLevel!==false&&Math.abs(gy-groundAt(near.x,near.z,near.y!==undefined?near.y:60))>2.5)continue;
