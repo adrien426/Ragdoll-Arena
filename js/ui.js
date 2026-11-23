@@ -63,6 +63,12 @@ bindBtn('inspBtn',v=>{if(v)inspectAim();});
 let lastTarget=null,lastTargetT=-99;
 bindBtn('tgtBtn',v=>{if(v&&lastTarget){openInspect(lastTarget);inspView='mus';document.querySelectorAll('#iViews button').forEach(x=>x.classList.toggle('on',x.dataset.v==='mus'));drawInspect();}});bindBtn('setBtn',v=>{if(v)openSettings();});
 bindBtn('catBtn',v=>{if(v)openCat();});
+// 🎲 : a random disaster somewhere around you (never the sandbox tools)
+bindBtn('rndBtn',v=>{if(v)randomEvent();});
+function randomEvent(){if(!player||!running||paused)return;initAudio();
+  const pool=CATAS.filter(e=>!['tp','roof','throw','people','slow','random'].includes(e.k));const e=pick(pool);
+  const p=player.P[player.pelvis];let t=null;for(let i=0;i<20&&!t;i++){const a=rnd(0,6.28),d=rnd(6,18);const x=p.x+Math.sin(a)*d,z=p.z+Math.cos(a)*d;const y=groundAt(x,z,p.y+3);if(Math.abs(y-p.y)<4&&!insideBox(x,y+0.5,z,0.3))t={x,y,z};}
+  if(!t)t=catTarget();addFeed('🎲 Hasard : '+e.icon+' '+e.n,3);try{e.f(t);}catch(err){console.error('random event failed',e.k,err);}}
 function openCat(){if(!player||!running)return;paused=true;$('cat').classList.remove('hidden');const L=$('catList');L.innerHTML='';
   for(const e of CATAS){const d=document.createElement('div');d.className='mitem';d.innerHTML='<b>'+e.icon+' '+e.n+'</b><i>'+e.d+'</i>';
     d.onclick=()=>{$('cat').classList.add('hidden');paused=false;initAudio();try{e.f(catTarget());}catch(err){console.error('catastrophe failed',e.k,err);}};L.appendChild(d);}}

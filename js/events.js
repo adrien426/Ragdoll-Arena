@@ -298,6 +298,7 @@ const CATAS=[
   {k:'gas',icon:'☠️',n:'Gaz toxique',d:'Chlore : brûle les poumons et les yeux',f:t=>toxicGas(t)},
   {k:'cold',icon:'🥶',n:'Vague de froid',d:'−25 °C + neige pendant 90 s',f:()=>weatherWave('cold')},
   {k:'heat',icon:'🥵',n:'Canicule',d:'46 °C pendant 90 s : coup de chaleur',f:()=>weatherWave('heat')},
+  {k:'random',icon:'🎲',n:'Au hasard',d:'Une catastrophe au hasard autour de toi',f:()=>randomEvent()},
   {k:'tp',icon:'🌀',n:'Me téléporter au point visé',d:'Sur un toit = vous pouvez sauter',f:t=>teleportPlayer(t)},
   {k:'roof',icon:'🏢',n:'Me mettre sur le plus haut toit',d:'Pour sauter dans le vide',f:()=>roofTeleport()},
   {k:'throw',icon:'🤾',n:'Projeter la personne visée',d:'La lance en l\'air',f:()=>throwTarget(aimTarget&&aimTarget.c&&aimTarget.c!==player?aimTarget.c:lastTarget)},
