@@ -21,9 +21,11 @@ function addFeed(t,sev){FEED.push({t:t+(t.startsWith('💀')?'':tipFor(t)),sev,t
 function reportInjuries(c,inj,point){
   if(!inj||!inj.length)return;
   if(!c.isPlayer&&c.alive&&c.conscious&&inj.some(x=>x.sev>=2)&&Math.random()<0.6)say(c,'hurt');
-  const sorted=inj.slice().sort((a,b)=>b.sev-a.sev);
-  if(SET.injuryText&&(c.isPlayer||hdist(c.P[c.pelvis],camera.position)<45)){for(let i=popups.length-1;i>=0;i--)if(popups[i].owner===c&&popups[i].max-popups[i].t<1.2)popups.splice(i,1);const anchor=c.P[c.head];sorted.slice(0,3).forEach((it,i)=>popupAt(add(anchor,{x:0,y:0.15,z:0}),it.t,SEV_TXT[clamp(it.sev,0,4)],2.4,2-i,c));}
+  {const seen=new Set();inj=inj.filter(x=>{if(seen.has(x.t))return false;seen.add(x.t);return true;});}
+  const hdr=inj.filter(x=>x.hdr),rest=inj.filter(x=>!x.hdr).sort((a,b)=>b.sev-a.sev);const sorted=hdr.concat(rest);
+  if(SET.injuryText&&(c.isPlayer||hdist(c.P[c.pelvis],camera.position)<45)){for(let i=popups.length-1;i>=0;i--)if(popups[i].owner===c&&popups[i].max-popups[i].t<1.2)popups.splice(i,1);const anchor=c.P[c.head];sorted.slice(0,hdr.length?4:3).forEach((it,i)=>popupAt(add(anchor,{x:0,y:0.15,z:0}),it.t,SEV_TXT[clamp(it.sev,0,4)],2.4,2-i,c));}
   if(c.isPlayer)for(const it of sorted.slice(0,4))addFeed(it.t,it.sev);
+  else if(c.lastHit===player&&hdr.length&&rest.length)addFeed(hdr[0].t+' : '+rest.slice(0,2).map(x=>x.t).join(' · '),Math.max(...rest.map(x=>x.sev)));
 }
 
 /* ---------------- input ---------------- */
@@ -157,7 +159,7 @@ function drawHUD(dt){
   // crosshair
   const cx=HW/2,cy=HH/2,w=WEAPONS[p.weapon];
   if(p.alive&&p.conscious){const gap=(w.type==='gun'?6+w.spread*120:5)+p.aimWob*160;hx.strokeStyle=aimTarget?'#ff4040':'rgba(255,255,255,.85)';hx.lineWidth=2;hx.beginPath();hx.moveTo(cx-gap-7,cy);hx.lineTo(cx-gap,cy);hx.moveTo(cx+gap,cy);hx.lineTo(cx+gap+7,cy);hx.moveTo(cx,cy-gap-7);hx.lineTo(cx,cy-gap);hx.moveTo(cx,cy+gap);hx.lineTo(cx,cy+gap+7);hx.stroke();
-    if(aimTarget){const t=aimTarget.c,h=t.H[aimTarget.hi];const reg=(h.split!==undefined&&aimTarget.t>h.split)?h.reg2:h.reg;hx.fillStyle='#fff';hx.font='bold 11px sans-serif';hx.fillText((t===p?'':t.name+' — ')+REGIONS[reg].n+' · '+vlen(sub(t.P[t.pelvis],p.P[p.pelvis])).toFixed(0)+' m',cx,cy+30);}
+    if(aimTarget){const t=aimTarget.c,h=t.H[aimTarget.hi];const reg=(h.split!==undefined&&aimTarget.t>h.split)?h.reg2:h.reg;hx.fillStyle='#fff';hx.font='bold 11px sans-serif';let zn=REGIONS[reg].n;try{zn=hitZone(t,reg,aimTarget.point).n;}catch(e){}hx.fillText((t===p?'':t.name+' — ')+zn+' · '+vlen(sub(t.P[t.pelvis],p.P[p.pelvis])).toFixed(0)+' m',cx,cy+30);}
     if(hitMarker>0){hx.strokeStyle='#fff';hx.lineWidth=2;hx.beginPath();for(const [a,b] of [[-1,-1],[1,-1],[-1,1],[1,1]]){hx.moveTo(cx+a*6,cy+b*6);hx.lineTo(cx+a*12,cy+b*12);}hx.stroke();}}
   hx.textAlign='left';
   // vitals panel

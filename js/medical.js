@@ -17,7 +17,7 @@ function initMedical(c){
   c.koT=0;c.faintT=0;c.tasedT=0;c.breathHold=0;c.headUnder=false;c.inWater=false;c.shivering=false;c.shiver=0;c.exert=0;
   c.legFn=[1,1];c.armFn=[1,1];c.grip=[1,1];c.support=1;c.canStand=true;c.speedF=1;c.dizzy=0;c.tetra=false;c.para=false;c.cordLvl=8;
   c.cause='';c.fallH=0;c.lastFallT=-99;c.fnT=0;c.dirty=true;c.shards=[];c.eyeRed=false;c.holdW=null;c.holdArm=1;c.crawling=false;c._lastAn=null;
-  c.lungWater=0;c.gasExp=0;c.gasDose=0;c.inhal=0;c.elec=false;c.o2T=0;c.pls=false;c.cprN=0;c.sayT=rnd(2,6);c.lastSay='';c.boneK=1;c.thermoK=1;
+  c.windT=0;c.lungWater=0;c.gasExp=0;c.gasDose=0;c.inhal=0;c.elec=false;c.o2T=0;c.pls=false;c.cprN=0;c.sayT=rnd(2,6);c.lastSay='';c.boneK=1;c.thermoK=1;
 }
 
 /* ---------------- local frames & anatomical volumes ---------------- */
@@ -130,7 +130,8 @@ function applyHit(c,hi,t,point,dir,w,src,E){
   c.lastHit=src;if(src&&src.isPlayer){hitMarker=0.15;if(typeof lastTarget!=='undefined'){lastTarget=c;lastTargetT=GT;}}if(c.isPlayer)hurtFlash=Math.min(0.6,hurtFlash+0.25);
   const inj=[];const dm=(src&&src.dmgMul)||1;let res=null;
   c.adren=1;c._lastAn=anchorAt(c,point);
-  if(w.kind==='blunt')applyBlunt(c,reg,point,dir,w.dmg*dm*rnd(0.85,1.2),inj);
+  const zone=hitZone(c,reg,point);inj.push({t:hitVerb(w)+' → '+zone.n,sev:1,hdr:true});
+  if(w.kind==='blunt'){const d=w.dmg*dm*rnd(0.85,1.2);applyBlunt(c,reg,point,dir,d,inj);bluntZone(c,zone,d,inj,point);}
   else if(w.kind==='taser')applyTaser(c,reg,point,inj);
   else{res=penetrate(c,reg,point,dir,w,E!==undefined?E:(w.energy||1));applyPenetrating(c,reg,res,w,dm,point,inj);}
   sfxAt(point);
@@ -321,6 +322,7 @@ function physiology(c,dt){
   else{c.breathHold=Math.max(0,c.breathHold-dt*4);if(c.lungWater>0&&c.rr>0)c.lungWater=Math.max(0,c.lungWater-dt*(c.conscious?1.6:0.6));}
   if(c.gasExp>0){const g=c.gasExp;c.gasDose+=g*dt;for(const s of SIDES)c.org[ORG['lung'+s]]=Math.max(0,c.org[ORG['lung'+s]]-g*dt*5);c.org[ORG.trachea]=Math.max(0,c.org[ORG.trachea]-g*dt*2.5);aw*=1-clamp(g,0,1)*0.5;for(const s of SIDES)c.org[ORG['eye'+s]]=Math.max(30,c.org[ORG['eye'+s]]-g*dt*1.5);c.painInj+=g*dt*4;c.gasExp=0;}
   if(c.inhal>0)aw*=1-clamp(c.inhal,0,1)*0.65;
+  if(c.windT>0){c.windT-=dt;aw*=0.25;}
   const cordCd=1-c.org[ORG.cordC]/100;let drive=1;if(cordCd>0.55&&c.cordLvl<=4)drive=0;else if(cordCd>0.55)drive=0.6;
   drive*=clamp(1-Math.max(0,c.morph-2)*0.28,0,1);if(c.temp<28)drive*=0.5;if(c.arrest)drive=0;c.drive=drive;
   let ribs=0;for(const s of SIDES)for(let i=1;i<=12;i++)if(c.boneSt[BONE_IDX['rib'+s+i]]>=2)ribs++;c.ribs=ribs;
@@ -660,4 +662,54 @@ function speakTick(c){
   else if(c.armFn[0]<0.3||c.armFn[1]<0.3)k='arm';else if(c.dizzy>30)k='head';else if(c.temp<35)k='cold';else if(c.temp>39.5)k='hot';
   else if(c.extBleed>1)k='bleed';else if(c.team===2&&c.ai&&c.ai.state==='flee')k='fear';
   if(k&&Math.random()<0.5)say(c,k);else c.sayT=rnd(2,5);
+}
+
+/* ---------------- hit zones : the exact anatomical spot that was struck ----------------
+   Same blow, different place, different injury : liver shot, solar plexus, jaw, temple, throat, knee… */
+function hitZone(c,reg,point){
+  const SD=s=>s>0?'D':'G',SK=s=>s>0?'R':'L',DG=S=>S==='R'?'D':'G';
+  if(reg==='thorax'||reg==='abdomen'||reg==='pelvis'){const l=locF(frameTorso(c),point);const front=l.z>-0.02,ax=Math.abs(l.x),sd=SD(l.x),sk=SK(l.x);
+    if(l.y>0.33){if(!front)return{k:'back',n:'Haut du dos'};if(ax<0.05)return{k:'sternum',n:'Sternum (devant le cœur)'};return{k:'ribs',n:'Côtes '+sd,s:sk};}
+    if(l.y>0.17){if(!front)return ax>0.03?{k:'kidney',n:'Rein '+sd+' (bas du dos)',s:sk}:{k:'spine',n:'Colonne (dos)'};
+      if(ax<0.035)return{k:'plexus',n:'Plexus solaire'};return l.x>0?{k:'liver',n:'Foie (côté droit)'}:{k:'spleen',n:'Rate / estomac (côté gauche)'};}
+    if(l.y>0.02)return front?{k:'belly',n:'Ventre (intestins)'}:{k:'lowback',n:'Bas du dos (lombaires)'};
+    if(front&&l.y<-0.06&&ax<0.07)return{k:'groin',n:'Entrejambe'};
+    return front?{k:'lowbelly',n:'Bas-ventre (vessie)'}:{k:'glute',n:'Bassin / fessier'};}
+  if(reg==='head'){const F=frameNeck(c);F.o=c.P[c.head];const l=locF(F,point),ax=Math.abs(l.x),sd=SD(l.x),sk=SK(l.x);
+    if(l.z<-0.04&&l.y<0.03)return{k:'nape',n:'Base du crâne (nuque)'};if(l.y>0.07)return{k:'crown',n:'Sommet du crâne'};
+    if(l.z>0.02){if(l.y<-0.035)return{k:'jaw',n:'Mâchoire / menton'};if(ax<0.025&&l.y<0.03)return{k:'nose',n:'Nez'};if(ax<0.065&&l.y<0.055)return{k:'eye',n:'Œil '+sd,s:sk};return{k:'forehead',n:'Front'};}
+    if(ax>0.06)return{k:'temple',n:'Tempe '+sd,s:sk};return{k:'skull',n:'Crâne'};}
+  if(reg==='neck'){const F=frameNeck(c);const l=locF(F,point),sd=SD(l.x),sk=SK(l.x);if(l.z>0.02&&Math.abs(l.x)<0.03)return{k:'throat',n:'Gorge (trachée)'};if(l.z<-0.02)return{k:'nape',n:'Nuque (vertèbres)'};return{k:'carotid',n:'Cou côté '+sd+' (carotide)',s:sk};}
+  const S=reg.slice(-1);const R=REGIONS[reg];const vol=volumeFor(c,reg),l=vol.local(point);
+  if(reg.startsWith('thigh')&&l.tr>0.85||reg.startsWith('shin')&&l.tr<0.12)return{k:'knee',n:'Genou '+DG(S),s:S,side:Math.abs(l.lat)>Math.abs(l.fr)};
+  if(reg.startsWith('uarm')&&l.tr>0.85||reg.startsWith('larm')&&l.tr<0.12)return{k:'elbow',n:'Coude '+DG(S),s:S};
+  if(reg.startsWith('shin')&&l.tr>0.85)return{k:'ankle',n:'Cheville '+DG(S),s:S};
+  return{k:'limb',n:R?R.n:reg,s:S};
+}
+function hitVerb(w){return w.id==='fists'?'👊 Coup de poing':w.id==='bat'?'🏏 Coup de batte':w.id==='knife'?'🔪 Coup de couteau':w.id==='katana'?'🗡️ Coup de sabre':w.id==='brick'?'🧱 Brique':w.id==='frag'?'💥 Éclat':w.kind==='taser'?'⚡ Taser':w.kind==='bullet'?(w.pellets>1?'💥 Plombs':'🔫 Balle'):'💢 Choc';}
+function bluntZone(c,z,d,inj,point){
+  const B=(k,m)=>{if(BONE_IDX[k]!==undefined)boneDamage(c,BONE_IDX[k],d*m,false,inj);},O=(k,m,kind)=>organDamage(c,ORG[k],d*m,kind||'blunt',inj),Mu=(k,m)=>muscleDamage(c,MUS_IDX[k],d*m,inj);
+  const st=t=>{c.stun=Math.max(c.stun,t);};
+  switch(z.k){
+    case'plexus':c.windT=Math.max(c.windT||0,2+d/8);st(1+d/25);c.painInj+=d*0.6;inj.push({t:'Souffle coupé (plexus solaire) – plié en deux',sev:2});O('stomach',0.25);break;
+    case'liver':O('liver',0.9);c.painInj+=d*1.1;if(d>14){st(2+d/18);inj.push({t:'Coup au foie : s\'effondre de douleur',sev:3});}break;
+    case'spleen':O('spleen',0.85);O('stomach',0.4);if(d>14)inj.push({t:'Nausées, envie de vomir',sev:1});break;
+    case'kidney':O('kidney'+z.s,0.9);c.painInj+=d*0.9;if(d>12)inj.push({t:'Rein '+SFR[z.s]+' contus : sang dans les urines',sev:2});break;
+    case'sternum':B('sternum',0.8);if(d>22&&Math.random()<0.04&&c.alive){c.arrest=true;c.arrestT=0;c.cause='Commotio cordis (coup sur le cœur)';c.conscious=false;inj.push({t:'Commotio cordis : le cœur s\'arrête ! (RCP + DAE)',sev:4});}else st(0.6);break;
+    case'ribs':for(let i=0;i<(d>25?2:1);i++)B('rib'+z.s+rndi(5,10),0.9);c.painInj+=d*0.5;break;
+    case'groin':c.painInj+=d*2.2;st(2.5+d/15);inj.push({t:'Coup à l\'entrejambe : douleur insupportable',sev:2});break;
+    case'lowbelly':O('bladder',0.7);break;
+    case'belly':O('smallInt',0.5);O('colon',0.35);c.windT=Math.max(c.windT||0,d/12);break;
+    case'lowback':case'spine':B('L'+rndi(1,5),0.5);c.painInj+=d*0.5;break;
+    case'jaw':B('mandible',0.9);c.concussion+=d*0.9;if(d>10&&Math.random()<0.3)inj.push({t:'Dent cassée',sev:1});break;
+    case'nose':B('nasal'+pick(SIDES),1.2);c.wounds.push(mkWound(c,'head',point,'Saignement de nez',rnd(0.3,0.7)));inj.push({t:'Nez qui saigne – les yeux pleurent',sev:1});st(0.5);break;
+    case'eye':O('eye'+z.s,0.8);B('zygomatic'+z.s,0.7);inj.push({t:'Œil '+SFR[z.s]+' touché : vision trouble, œil au beurre noir',sev:2});break;
+    case'temple':B('temporal'+z.s,1.4);B('sphenoid',0.5);c.concussion+=d*0.6;if(d>24){c.ichRate=(c.ichRate||0)+0.35;inj.push({t:'Tempe : risque d\'hématome extradural (artère méningée)',sev:3});}break;
+    case'nape':B('C1',0.6);B('C2',0.6);B('occipital',0.8);O('brainstem',0.15);c.concussion+=d*0.5;break;
+    case'throat':O('trachea',0.9);c.windT=Math.max(c.windT||0,3+d/6);inj.push({t:'Coup à la gorge : trachée écrasée, respire mal',sev:3});break;
+    case'carotid':c.concussion+=d*0.3;if(d>18&&Math.random()<0.3){c.koT=Math.max(c.koT,2+d/15);inj.push({t:'Choc sur la carotide : évanouissement',sev:2});}break;
+    case'knee':if(z.side){Mu('mcl'+z.s,1.3);Mu('acl'+z.s,0.6);}else{B('patella'+z.s,1.1);Mu('meniscus'+z.s,0.7);}c.painInj+=d*0.8;break;
+    case'elbow':O('ulnarN'+z.s,0.4);c.painInj+=d*0.6;inj.push({t:'Coup au coude : décharge électrique dans le bras (nerf ulnaire)',sev:1});break;
+    case'ankle':Mu('ankleLig'+z.s,1.1);B('fibula'+z.s,0.6);break;
+  }
 }
