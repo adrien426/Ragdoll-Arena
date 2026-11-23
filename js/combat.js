@@ -61,6 +61,7 @@ function attackLogic(c,dt){
     else if(w.type==='gun'){c.ammo[c.weapon]--;fire(c,w);if(!w.auto&&c.isPlayer)c.input.attack=false;}
     else if(w.type==='taser'){c.ammo[c.weapon]--;fireTaser(c,w);if(c.isPlayer)c.input.attack=false;}
     else if(w.type==='throw'){c.ammo[c.weapon]--;c.swing=0;if(c.isPlayer)c.input.attack=false;}
+    else if(w.type==='bow'||w.type==='flame'||w.type==='rocket'){c.ammo[c.weapon]--;fireSpecial(c,w);if(!w.auto&&c.isPlayer)c.input.attack=false;}
   }
 }
 function meleeHit(c,w){
@@ -113,7 +114,7 @@ function releaseMolotov(c){const h=c.P[c.arms[Math.max(0,c.useArm)].ha];const d=
   const mesh=new THREE.Mesh(BOTTLE_GEO,M.glassGreen);mesh.castShadow=true;scene.add(mesh);PROJ.push({p:{x:h.x,y:h.y,z:h.z},v,owner:c,mesh,life:6});sfxAt(h);SFX.swing();}
 const FIRES=[];
 function updProjectiles(dt){
-  for(let i=PROJ.length-1;i>=0;i--){const q=PROJ[i];if(q.kind){updThrown(q,dt,i);continue;}q.v.y-=G;const np=add(q.p,q.v);q.life-=dt;
+  for(let i=PROJ.length-1;i>=0;i--){const q=PROJ[i];if(q.kind){if(q.kind==='bolt'||q.kind==='rocket')updSpecial(q,dt,i);else updThrown(q,dt,i);continue;}q.v.y-=G;const np=add(q.p,q.v);q.life-=dt;
     if(Math.random()<0.7)emitFlame(q.p.x,q.p.y+0.1,q.p.z,0.4);
     let hit=false,hc=null;
     if(np.y<=groundAt(np.x,np.z,np.y+0.3)+0.02||insideBox(np.x,np.y,np.z,0))hit=true;
@@ -167,8 +168,8 @@ function hostileAI(e,dt){
   const tg=p.P[e.ai.tgt==null?p.chest:e.ai.tgt];const pp=p.P[p.pelvis];
   const tx=pp.x-me.x,tz=pp.z-me.z,dist=Math.hypot(tx,tz),dn={x:tx/(dist||1),z:tz/(dist||1)};
   e.yaw=Math.atan2(tx,tz);e.aimP={x:tg.x,y:tg.y+e.ai.jit,z:tg.z};
-  const ranged=w.type!=='melee';const range=w.type==='gun'?34:w.type==='taser'?6.5:w.type==='throw'?20:0.62+(w.reach||0)+0.05;
-  const want=ranged?(w.type==='taser'?5:w.type==='throw'?12:11+e.ai.off):range-0.18;
+  const ranged=w.type!=='melee';const range=(w.type==='gun'||w.type==='bow'||w.type==='rocket')?34:w.type==='flame'?6.5:w.type==='taser'?6.5:w.type==='throw'?20:0.62+(w.reach||0)+0.05;
+  const want=ranged?(w.type==='taser'||w.type==='flame'?4.5:w.type==='throw'?12:w.type==='rocket'?18:11+e.ai.off):range-0.18;
   const hurt=e.lossF>0.22||e.painEff>65;
   e.ai.losT-=dt;if(e.ai.losT<=0){e.ai.losT=0.3;const o=e.P[e.neck];const h=rayCast(o,norm(sub(e.aimP,o)),dist+3,e,null);const was=e.ai.los;e.ai.los=h.c===p;if(e.ai.los&&!was&&Math.random()<0.5)say(e,'hostile');}
   let mv={x:0,z:0};
@@ -217,7 +218,7 @@ const PANTS=['#2a3150','#3a3226','#1d1d1f','#4a4a4e','#2f3f5a','#5b4a3a'];
 const SKINS=['#e8c0a0','#d9a47c','#c08055','#8a5638','#efc6a0','#a26845','#6b4128'];
 const HAIRS=['#17120e','#4e3218','#2a1a10','#8a6a3a','#b8a070','#5a5a5a','#c4c4c4'];
 function outfit(){return{skin:pick(SKINS),shirt:pick(SHIRTS),pants:pick(PANTS),hair:pick(HAIRS),shoe:pick(['#151515','#2a2016','#3a3a3a','#d8d8d8'])};}
-function enemyWeapon(){const pool=[0];if(wave>=2)pool.push(1);if(wave>=3)pool.push(2);if(wave>=4)pool.push(4);if(wave>=5)pool.push(3);if(wave>=6)pool.push(5);if(wave>=7)pool.push(7);if(wave>=8)pool.push(6);if(wave>=10)pool.push(8);if(wave>=3&&Math.random()<0.15)return 10;return pick(pool);}
+function enemyWeapon(){const pool=[0];if(wave>=2)pool.push(1);if(wave>=3)pool.push(2);if(wave>=4)pool.push(4);if(wave>=5)pool.push(3);if(wave>=6)pool.push(5);if(wave>=7)pool.push(7);if(wave>=8)pool.push(6);if(wave>=10)pool.push(8);if(wave>=3&&Math.random()<0.15)return 10;const W=id=>WEAPONS.findIndex(x=>x.id===id);if(wave>=2)pool.push(W('knuckles'),W('machete'));if(wave>=4)pool.push(W('revolver'),W('crowbar'));if(wave>=6)pool.push(W('uzi'),W('axe'));if(wave>=9)pool.push(W('crossbow'),W('chainsaw'));if(wave>=11)pool.push(W('flamer'));if(wave>=13&&Math.random()<0.1)return W('rpg');return pick(pool);}
 function spawnHostile(){
   const pp=player.P[player.pelvis];const s=spawnPoint({x:pp.x,z:pp.z,y:pp.y},16,26,true,true)||spawnPoint({x:pp.x,z:pp.z,y:pp.y},16,32,true,true)||spawnPoint({x:pp.x,z:pp.z,y:pp.y},12,32,false);if(!s)return false;
   const o=outfit();o.weapon=enemyWeapon();o.y=s.y+0.5;

@@ -83,7 +83,7 @@ function tapInspect(sx,sy){
 function inspectAim(){if(!player)return;if(aimTarget&&aimTarget.c){openInspect(aimTarget.c);return;}let best=null,bd=6;for(const c of chars){if(c===player)continue;const d=vlen(sub(c.P[c.pelvis],player.P[player.pelvis]));if(d<bd){bd=d;best=c;}}openInspect(best||player);}
 
 /* ---------------- weapons bar ---------------- */
-const wbar=$('weapons');const WSHORT=['Poings','Couteau','Batte','Taser','Pistolet','Katana','Pompe','Molotov','Fusil AR','Sniper','Brique','Grenade','Machette','Hache','Marteau','Pied-biche'];
+const wbar=$('weapons');const WSHORT=['Poings','Couteau','Batte','Taser','Pistolet','Katana','Pompe','Molotov','Fusil AR','Sniper','Brique','Grenade','Machette','Hache','Marteau','Pied-biche','P. américain','Tronçonn.','Revolver','Uzi','Arbalète','L-flammes','L-roquettes'];
 function buildWeaponBar(){wbar.innerHTML='';WEAPONS.forEach((w,i)=>{const d=document.createElement('div');const lk=!weaponUnlocked(i);d.className='w'+(player&&player.weapon===i?' sel':'')+(lk?' lock':'');d.innerHTML='<b>'+(lk?'🔒':w.icon)+'</b>'+(lk?w.unlock+' kills':WSHORT[i]);d.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();initAudio();selectWeapon(i);});wbar.appendChild(d);});}
 function selectWeapon(i){if(!player||i<0||i>=WEAPONS.length||!weaponUnlocked(i))return;player.weapon=i;player.swing=-1;player.cd=0.25;player.reloadT=0;buildWeaponBar();}
 
@@ -414,7 +414,7 @@ function drawInspect(sel){
 
 /* ---------------- settings ---------------- */
 const SET_UI=[
-  ['pvp','check','Mode PvP','Activé : ennemis armés en vagues qui se battent. Désactivé : bac à sable, les PNJ se promènent et ne se défendent pas.'],
+  ['pvp','check','Mode PvP','Activé : ennemis armés en vagues qui se battent. Désactivé : bac à sable, les passants se promènent, mais certains se défendent (couteau, pistolet…) si tu les attaques.'],
   ['map','select','Ville',[['lux','Luxembourg – Ville-Haute, Pont Adolphe, Pétrusse, Gare'],['dark','Quartier Noir – ville inventée dangereuse']]],
   ['temp','range','Température extérieure (°C)',[-25,45,1]],['rain','check','Pluie (neige si ≤ 0 °C)'],['night','check','Nuit (lampadaires, lampe torche)'],
   ['npcCount','range','Nombre de PNJ (bac à sable)',[2,30,1]],['difficulty','select','Difficulté PvP',[['facile','Facile'],['normal','Normal'],['reel','Réaliste (mêmes dégâts que toi)']]],
@@ -444,7 +444,7 @@ function newGame(){
   chars.push(player);camYaw=MAP.yaw;camPitch=-0.12;
   kills=0;wave=0;waveActive=false;betweenT=3;gameOverT=-1;spawnT=0;GT=0;hurtFlash=0;
   resetInv();updMedCount();buildWeaponBar();
-  if(SET.pvp)showMsg('Mode PvP – '+MAP.label+'<br><small>La première vague arrive…</small>',3);else showMsg('Bac à sable – '+MAP.label+'<br><small>Les PNJ ne se défendent pas</small>',3);
+  if(SET.pvp)showMsg('Mode PvP – '+MAP.label+'<br><small>La première vague arrive…</small>',3);else showMsg('Bac à sable – '+MAP.label+'<br><small>Attention : certains passants se défendent si tu les attaques</small>',3);
 }
 function startGame(){initAudio();if(AC){loopSnd('rain','lowpass',1400,0.3);loopVol('rain',SET.rain&&!SNOW?0.22:0);loopSnd('wind','lowpass',350,0.4);loopVol('wind',SET.temp<2||SET.rain?0.08:0.03);}
   $('overlay').style.display='none';newGame();running=true;paused=false;}

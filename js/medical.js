@@ -650,7 +650,7 @@ const SAY={
   para:['Je ne sens plus mes jambes !'],tetra:['Je ne peux plus bouger… rien…'],head:['Où… où suis-je ?','Ma tête… tout tourne…'],
   cold:["J'ai… tellement froid…",'*claque des dents*'],hot:["Il fait trop chaud… j'ai la tête qui tourne…"],
   fear:['Au secours !','Fuyez ! Vite !','Appelez les secours !','Aidez-moi !'],armed:['Il a une arme ! Fuyez !','Ne tirez pas !','Appelez la police !'],hurt:['Aïe !','Ça fait mal !','Ahh !'],
-  thanks:['Merci… merci…','Merci, vous m\'avez sauvé…'],hostile:['Tu vas le regretter !','Il est là !','Encerclez-le !'],
+  thanks:['Merci… merci…','Merci, vous m\'avez sauvé…'],angry:['Tu vas me le payer !','Tu me cherches ?!','Je vais me défendre !','Tu veux te battre ? Viens !'],hostile:['Tu vas le regretter !','Il est là !','Encerclez-le !'],
 };
 function say(c,key,force){if(!c.alive||!c.conscious||(c.sayT>0&&!force))return;const L=SAY[key];if(!L)return;const t=pick(L);c.sayT=rnd(4,8);c.lastSay=t;
   if(c.isPlayer){addFeed('Vous : « '+t+' »',1);return;}if(hdist(c.P[c.head],camera.position)<40)speechAt(c,t);}
@@ -687,7 +687,7 @@ function hitZone(c,reg,point){
   if(reg.startsWith('shin')&&l.tr>0.85)return{k:'ankle',n:'Cheville '+DG(S),s:S};
   return{k:'limb',n:R?R.n:reg,s:S};
 }
-function hitVerb(w){return w.id==='machete'?'🔪 Coup de machette':w.id==='axe'?'🪓 Coup de hache':w.id==='hammer'?'🔨 Coup de marteau':w.id==='crowbar'?'🔧 Coup de pied-de-biche':w.id==='fists'?'👊 Coup de poing':w.id==='bat'?'🏏 Coup de batte':w.id==='knife'?'🔪 Coup de couteau':w.id==='katana'?'🗡️ Coup de sabre':w.id==='brick'?'🧱 Brique':w.id==='frag'?'💥 Éclat':w.kind==='taser'?'⚡ Taser':w.kind==='bullet'?(w.pellets>1?'💥 Plombs':'🔫 Balle'):'💢 Choc';}
+function hitVerb(w){return w.id==='knuckles'?'🥊 Poing américain':w.id==='chainsaw'?'🪚 Tronçonneuse':w.id==='crossbow'?'🏹 Carreau d\'arbalète':w.id==='revolver'?'🔫 Balle de .357':w.id==='uzi'?'🔫 Rafale d\'Uzi':w.id==='machete'?'🔪 Coup de machette':w.id==='axe'?'🪓 Coup de hache':w.id==='hammer'?'🔨 Coup de marteau':w.id==='crowbar'?'🔧 Coup de pied-de-biche':w.id==='fists'?'👊 Coup de poing':w.id==='bat'?'🏏 Coup de batte':w.id==='knife'?'🔪 Coup de couteau':w.id==='katana'?'🗡️ Coup de sabre':w.id==='brick'?'🧱 Brique':w.id==='frag'?'💥 Éclat':w.kind==='taser'?'⚡ Taser':w.kind==='bullet'?(w.pellets>1?'💥 Plombs':'🔫 Balle'):'💢 Choc';}
 function bluntZone(c,z,d,inj,point){
   const B=(k,m)=>{if(BONE_IDX[k]!==undefined)boneDamage(c,BONE_IDX[k],d*m,false,inj);},O=(k,m,kind)=>organDamage(c,ORG[k],d*m,kind||'blunt',inj),Mu=(k,m)=>muscleDamage(c,MUS_IDX[k],d*m,inj);
   const st=t=>{c.stun=Math.max(c.stun,t);};

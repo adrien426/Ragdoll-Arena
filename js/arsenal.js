@@ -83,3 +83,67 @@ function bloodTick(c,dt){
     // lying in your blood : the pool spreads under the wound
     if(w.cur>0.6){w.poolT=(w.poolT||0)-dt;if(w.poolT<=0){w.poolT=0.6;const p=anchorPos(c,w.an,0);const g=groundAt(p.x,p.z,p.y+0.2);if(p.y-g<0.35&&waterLevel(p.x,p.z)<g){addStain(p.x,p.z,g,clamp(w.cur*0.012,0.02,0.09));}}}}
 }
+
+// ---------------- new weapon meshes ----------------
+const _buildWeapon2=buildWeapon;
+buildWeapon=function(wg,w){
+  const ad=(geo,m,x,y,z,rx,ry,rz)=>{const me=new THREE.Mesh(geo,m);me.position.set(x,y,z);me.rotation.set(rx||0,ry||0,rz||0);me.castShadow=true;wg.add(me);return me;};
+  const orange=M.orangeP||(M.orangeP=std({color:0xe2701a,roughness:0.5}));
+  switch(w.id){
+    case'knuckles':for(let i=0;i<4;i++)ad(new THREE.TorusGeometry(0.011,0.004,6,10),M.bladeDark,(i-1.5)*0.022,0,0.03,0,Math.PI/2);ad(new THREE.BoxGeometry(0.09,0.012,0.012),M.bladeDark,0,-0.016,0.03);break;
+    case'chainsaw':ad(new THREE.BoxGeometry(0.11,0.14,0.26),orange,0,0.02,0.02);ad(new THREE.TorusGeometry(0.05,0.008,6,12,Math.PI),M.grip,0,0.1,0.02,0,Math.PI/2);
+      ad(new THREE.BoxGeometry(0.012,0.06,0.5),M.blade,0,0,0.38);ad(new THREE.BoxGeometry(0.016,0.068,0.5),M.grip,0,0,0.38).scale.set(1,1,0.98);break;
+    case'revolver':ad(new THREE.BoxGeometry(0.028,0.035,0.08),M.bladeDark,0,0.035,0.03);ad(new THREE.CylinderGeometry(0.019,0.019,0.04,8).rotateX(Math.PI/2),M.bladeDark,0,0.033,0.065);
+      ad(new THREE.CylinderGeometry(0.008,0.008,0.15,10).rotateX(Math.PI/2),M.blade,0,0.042,0.15);ad(new THREE.BoxGeometry(0.025,0.08,0.035),M.wood2,0,-0.015,-0.005,-0.25);break;
+    case'uzi':ad(new THREE.BoxGeometry(0.04,0.06,0.25),M.bladeDark,0,0.03,0.08);ad(new THREE.BoxGeometry(0.025,0.14,0.03),M.grip,0,-0.06,0.03);ad(new THREE.CylinderGeometry(0.008,0.008,0.06,8).rotateX(Math.PI/2),M.blade,0,0.035,0.23);break;
+    case'crossbow':ad(new THREE.BoxGeometry(0.04,0.05,0.62),M.wood2,0,0,0.18);ad(new THREE.BoxGeometry(0.5,0.02,0.03),M.grip,0,0.02,0.45).rotation.z=0;
+      {const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.25,0.02,0.44),new THREE.Vector3(0,0.03,0.25),new THREE.Vector3(0.25,0.02,0.44)]);const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xdddddd}));wg.add(l);}
+      ad(new THREE.CylinderGeometry(0.004,0.004,0.4,6).rotateX(Math.PI/2),M.blade,0,0.035,0.42);break;
+    case'flamer':ad(new THREE.CylinderGeometry(0.05,0.05,0.3,12),M.redPaint,0,-0.06,0.05);ad(new THREE.BoxGeometry(0.04,0.05,0.5),M.bladeDark,0,0.03,0.3);ad(new THREE.CylinderGeometry(0.018,0.012,0.18,10).rotateX(Math.PI/2),M.blade,0,0.03,0.62);break;
+    case'rpg':ad(new THREE.CylinderGeometry(0.045,0.045,1.0,14).rotateX(Math.PI/2),M.grenade||M.bladeDark,0,0.05,0.25);ad(new THREE.ConeGeometry(0.05,0.2,12).rotateX(Math.PI/2),M.grenade||M.bladeDark,0,0.05,0.85);
+      ad(new THREE.BoxGeometry(0.03,0.09,0.04),M.grip,0,-0.03,0.02);ad(new THREE.BoxGeometry(0.03,0.09,0.04),M.grip,0,-0.03,0.25);break;
+    default:_buildWeapon2(wg,w);
+  }
+};
+// ---------------- crossbow bolts, rockets, flamethrower ----------------
+const BOLT_GEO=new THREE.CylinderGeometry(0.004,0.004,0.4,6).rotateX(Math.PI/2),ROCKET_GEO=new THREE.CylinderGeometry(0.04,0.04,0.5,10).rotateX(Math.PI/2);
+function fireSpecial(c,w){
+  const mz=muzzleOf(c,w);let dir;
+  if(c.isPlayer){const o=add({x:camera.position.x,y:camera.position.y,z:camera.position.z},mul(camDir,2));dir=norm(sub(c.aimP,mz));const d2=norm(sub(c.aimP,o));dir=norm(add(mul(dir,0.5),mul(d2,0.5)));}else dir=norm(sub(c.aimP,mz));
+  if(w.type==='bow'){const m=new THREE.Mesh(BOLT_GEO,M.blade);m.position.set(mz.x,mz.y,mz.z);scene.add(m);PROJ.push({p:{...mz},v:mul(dir,75/60),owner:c,mesh:m,life:4,kind:'bolt',w,age:0});sfxAt(mz);SFX.swing();}
+  else if(w.type==='rocket'){const m=new THREE.Mesh(ROCKET_GEO,M.grenade||M.bladeDark);m.position.set(mz.x,mz.y,mz.z);scene.add(m);PROJ.push({p:{...mz},v:mul(dir,42/60),owner:c,mesh:m,life:5,kind:'rocket',age:0});sfxAt(mz);SFX.whoosh();SFX.shot(1.6);addAlarm(mz,50);c.recoil=1;}
+  else if(w.type==='flame'){
+    for(let i=0;i<6;i++){const s=rnd(0.2,1);const q=add(mz,mul(dir,s*0.4));emitFlame(q.x+rnd(-0.05,0.05),q.y+rnd(-0.05,0.05),q.z+rnd(-0.05,0.05),1.2+s);}
+    for(let k=1;k<=7;k++){const q=add(mz,add(mul(dir,k*0.95),{x:rnd(-0.12,0.12)*k*0.3,y:rnd(-0.05,0.12)*k*0.3,z:rnd(-0.12,0.12)*k*0.3}));if(Math.random()<0.7)emitFlame(q.x,q.y,q.z,1.4+k*0.25);if(k>4&&Math.random()<0.15)emitSmoke(q.x,q.y,q.z,0.2,1.5,0.015);}
+    if(Math.random()<0.15){sfxAt(mz);SFX.whoosh();}addAlarm(mz,25);
+    // everyone inside the 7 m cone of fire burns
+    for(const o of chars){if(o===c)continue;for(const pi of [o.chest,o.head,o.pelvis,o.legs[0].kn,o.legs[1].kn]){const p=o.P[pi];const v=sub(p,mz),d=vlen(v);if(d>7.2||d<0.1)continue;if(dot(v,dir)/d<0.93)continue;if(!losClear(mz,p))continue;
+      for(const r of REG_KEYS)if(Math.random()<0.25)burnDose(o,r,rnd(0.15,0.45));if(Math.random()<0.08)ignite(o,'thorax',6);o.lastHit=c;wake(o);break;}}
+    const end=add(mz,mul(dir,7));const gy=groundAt(end.x,end.z,end.y+1);if(end.y-gy<1&&Math.random()<0.03&&waterLevel(end.x,end.z)<gy)FIRES.push({x:end.x,y:gy+0.05,z:end.z,r:1.2,life:10,max:10});
+  }
+  if(!c.isPlayer)return;
+}
+function updSpecial(q,dt,i){
+  q.age+=dt;if(q.kind==='bolt')q.v.y-=G*0.25;const np=add(q.p,q.v);const dir=norm(q.v);
+  q.mesh.position.set(np.x,np.y,np.z);q.mesh.lookAt(np.x+dir.x,np.y+dir.y,np.z+dir.z);
+  if(q.kind==='rocket'){emitSmoke(q.p.x,q.p.y,q.p.z,0.55,1.6,0.004,null,0.004);emitFlame(q.p.x,q.p.y,q.p.z,0.9);}
+  const hit=projHitChar(q,q.p,np);const gy=groundAt(np.x,np.z,np.y+0.5);const wall=insideBox(np.x,np.y,np.z,0);
+  if(hit){if(q.kind==='bolt'){applyHit(hit.c,hit.h.hi,hit.h.t,hit.pt,dir,q.w,q.owner,1);scene.remove(q.mesh);PROJ.splice(i,1);}else{scene.remove(q.mesh);PROJ.splice(i,1);explode(hit.pt,1.6,q.owner,{fire:true});}return;}
+  if(np.y<=gy+0.02||wall){if(q.kind==='rocket'){scene.remove(q.mesh);PROJ.splice(i,1);explode({x:np.x,y:Math.max(np.y,gy+0.2),z:np.z},1.6,q.owner,{fire:true});return;}
+    sfxAt(np);SFX.ric();q.mesh.position.set(q.p.x,q.p.y,q.p.z);restDebris(q);PROJ.splice(i,1);return;}
+  q.p=np;q.life-=dt;if(q.life<=0){scene.remove(q.mesh);PROJ.splice(i,1);}
+}
+// ---------------- people defend themselves ----------------
+// A passer-by you attack may fight back (some carry a knife or a handgun), witnesses sometimes join in.
+function provoke(c,by,witness){
+  if(!c.alive||c.team!==2||!by||!by.isPlayer||c._provoked)return;
+  if(witness){if(Math.random()>=0.15)return;}else{c._provoked=true;if(Math.random()>=0.5)return;}c._provoked=true;
+  const W=id=>WEAPONS.findIndex(x=>x.id===id);const r=Math.random();
+  const wi=r<0.12?W('pistol'):r<0.2?W('revolver'):r<0.42?W('knife'):r<0.5?W('bat'):r<0.56?W('crowbar'):r<0.6?W('hammer'):r<0.66?W('knuckles'):W('fists');
+  c.team=1;c.hasWeapon=true;c.weapon=wi;c.ammo[wi]=WEAPONS[wi].mag||0;c.dmgMul=0.9;c.cdMul=1.5;c.speedMul=Math.max(c.speedMul||1,0.95);c.ai.react=rnd(0.3,0.6);c.ai.state='fight';
+  if(!c.wm[wi]){const wg=new THREE.Group();wg.visible=false;c.wg.add(wg);if(!(PROPS.ready&&realWeapon(wg,WEAPONS[wi])))buildWeapon(wg,WEAPONS[wi]);c.wm[wi]=wg;}
+  say(c,'angry',true);if(WEAPONS[wi].type==='gun'){sfxAt(c.P[c.chest]);SFX.reload();addFeed('⚠️ '+c.name+' sort une arme !',3);}else addFeed('⚠️ '+c.name+' se défend !',2);
+}
+const _applyHitDef=applyHit;
+applyHit=function(c,hi,t,point,dir,w,src,E){const r=_applyHitDef(c,hi,t,point,dir,w,src,E);
+  if(c&&src&&src.isPlayer&&c.team===2&&c.alive){provoke(c,src);for(const o of chars)if(o!==c&&o.team===2&&o.alive&&hdist(o.P[o.pelvis],c.P[c.pelvis])<10)provoke(o,src,true);}return r;};

@@ -204,7 +204,7 @@ function animStep(c,dt){
   S.blendT=(S.blendT||0)+dt;
   if(k.mode==='ctrl'){
     const w=WEAPONS[c.weapon];const aiming=c.swing>=0||c._aimT>GT||(!c.isPlayer&&c.team===1&&c.ai&&c.ai.los);
-    const ik=c.hasWeapon&&aiming&&(w.type==='gun'||w.type==='taser')&&c.useArm===0&&c.reloadT<=0;   // firearms : real shooting stance
+    const ik=c.hasWeapon&&aiming&&(w.type==='gun'||w.type==='taser'||w.type==='bow'||w.type==='flame'||w.type==='rocket')&&c.useArm===0&&c.reloadT<=0;   // firearms : real shooting stance
     const armsRag=c.hasWeapon&&aiming&&!ik;S.ik=ik;
     S.armsRag=armsRag;const any=armsRag||ik;if(any!==S.armsAny){S.armsAny=any;if(S.blendT>=(S.blendLen||ANIM_BLEND)){snapshot(S);S.blendT=0;S.blendLen=0.2;S.blendOnly=ARM_BONES;}}
     const v=Math.hypot(k.vx,k.vz),lim=Math.min(c.legFn[0],c.legFn[1]);
@@ -255,7 +255,7 @@ function aimStance(c,w){
   const shR=new THREE.Vector3();S.bones.RightArm.getWorldPosition(shR);const shL=new THREE.Vector3();S.bones.LeftArm.getWorldPosition(shL);
   const tgt=c.aimP?v3(c.aimP):shR.clone().add(new THREE.Vector3(Math.sin(c.k.yaw),0,Math.cos(c.k.yaw)));
   const right=shR.clone().sub(shL).normalize(),down=new THREE.Vector3(0,-1,0);
-  const long=w.two||w.id==='shotgun'||w.id==='rifle'||w.id==='sniper';
+  const long=(w.two||w.id==='shotgun'||w.id==='rifle'||w.id==='sniper')&&w.type!=='melee';
   if(!long){const d=tgt.clone().sub(shR).normalize();const hand=shR.clone().add(d.clone().multiplyScalar(0.5)).add(right.clone().multiplyScalar(-0.06));
     ikArm(S,0,hand,down.clone().add(right.clone().multiplyScalar(0.6)));
     ikArm(S,1,hand.clone().add(right.clone().multiplyScalar(-0.05)).add(down.clone().multiplyScalar(0.03)),down.clone().add(right.clone().multiplyScalar(-0.6)));

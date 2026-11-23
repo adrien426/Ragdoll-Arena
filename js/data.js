@@ -31,6 +31,13 @@ const WEAPONS=[
   {id:'axe',name:'Hache',icon:'🪓',type:'melee',kind:'slash',dmg:52,reach:0.62,cd:0.95,imp:0.035,unlock:8,len:0.72,depth:0.09,sever:0.3},
   {id:'hammer',name:'Marteau',icon:'🔨',type:'melee',kind:'blunt',dmg:34,reach:0.3,cd:0.6,imp:0.02,unlock:2,len:0.33,focal:true},
   {id:'crowbar',name:'Pied-de-biche',icon:'🔧',type:'melee',kind:'blunt',dmg:36,reach:0.55,cd:0.7,imp:0.035,unlock:5,len:0.6},
+  {id:'knuckles',name:'Poing américain',icon:'🥊',type:'melee',kind:'blunt',dmg:17,reach:0.02,cd:0.4,imp:0.02,unlock:1,len:0.05},
+  {id:'chainsaw',name:'Tronçonneuse',icon:'🪚',type:'melee',kind:'slash',dmg:20,reach:0.5,cd:0.18,imp:0.01,unlock:12,len:0.75,depth:0.09,sever:0.35,two:true},
+  {id:'revolver',name:'Revolver .357',icon:'🔫',type:'gun',kind:'bullet',dmg:44,energy:1.6,cd:0.55,spread:0.008,imp:0.035,unlock:7,len:0.27,pellets:1,mag:6,reload:2.4},
+  {id:'uzi',name:'Uzi',icon:'🔫',type:'gun',kind:'bullet',dmg:22,energy:0.9,cd:0.07,spread:0.035,imp:0.015,unlock:11,len:0.3,pellets:1,auto:true,mag:32,reload:1.8},
+  {id:'crossbow',name:'Arbalète',icon:'🏹',type:'bow',kind:'stab',dmg:46,depth:0.32,cd:1.3,imp:0.03,unlock:15,len:0.62,two:true,mag:1,reload:1.5},
+  {id:'flamer',name:'Lance-flammes',icon:'🔥',type:'flame',kind:'fire',dmg:0,cd:0.05,unlock:20,len:0.8,two:true,auto:true,mag:160,reload:3.2},
+  {id:'rpg',name:'Lance-roquettes',icon:'🚀',type:'rocket',kind:'explosive',dmg:0,cd:2,unlock:28,len:1.05,two:true,mag:1,reload:3.2},
 ];
 
 /* ---------------- MEDICAL ITEMS ---------------- */
