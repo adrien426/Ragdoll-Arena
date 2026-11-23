@@ -49,7 +49,10 @@ function tree(B,x,z,s,y0){s=s||1;y0=y0||0;cyl(B,x,y0+1.8*s,z,0.13*s,0.2*s,3.6*s,
 function deadTree(B,x,z){cyl(B,x,1.8,z,0.1,0.18,3.6,6,M.burnt);for(let i=0;i<3;i++){const g=new THREE.CylinderGeometry(0.03,0.06,1.4,5);g.rotateZ(rnd(-1.1,1.1));g.rotateY(rnd(0,6));g.translate(x,rnd(2.6,3.4),z);B.add(g,M.burnt);}addCollider(x-0.2,0,z-0.2,x+0.2,3.4,z+0.2);}
 function lamp(B,x,z,y0,broken){y0=y0||0;cyl(B,x,y0+2.2,z,0.05,0.08,4.4,6,M.metalDark);bx(B,x,y0+4.5,z,0.28,0.4,0.28,broken?M.metalDark:M.lampHead,0,0,false);addCollider(x-0.1,y0,z-0.1,x+0.1,y0+4.4,z+0.1);if(!broken)LAMPS.push({x,y:y0+4.4,z});}
 function bench(B,x,z,alongX){if(alongX){bx(B,x,0.45,z,1.8,0.08,0.45,M.wood,1,1,false);bx(B,x,0.75,z-0.2,1.8,0.45,0.06,M.wood,1,1,false);addCollider(x-0.9,0,z-0.25,x+0.9,0.5,z+0.25);}else{bx(B,x,0.45,z,0.45,0.08,1.8,M.wood,1,1,false);bx(B,x-0.2,0.75,z,0.06,0.45,1.8,M.wood,1,1,false);addCollider(x-0.25,0,z-0.9,x+0.25,0.5,z+0.9);}}
-function car(B,x,z,alongX,paint,burnt){const body=burnt?M.burnt:CAR_PAINT[paint%CAR_PAINT.length];const L=4.3,W=1.8;const sx=alongX?L:W,sz=alongX?W:L;
+function car(B,x,z,alongX,paint,burnt){
+  if(typeof PROPS!=='undefined'&&PROPS.ready){const g=carModel(null,burnt);if(g){g.position.set(x,terrainH(x,z),z);g.rotation.y=alongX?0:Math.PI/2*(Math.random()<0.5?1:-1);addObj(g);
+    const L=g.userData.len,W=g.userData.w;const sx=alongX?L:W,sz=alongX?W:L;addCollider(x-sx/2,0,z-sz/2,x+sx/2,1.0,z+sz/2);addCollider(x-sx*0.3,1.0,z-sz*0.3,x+sx*0.3,1.45,z+sz*0.3);return;}}
+  const body=burnt?M.burnt:CAR_PAINT[paint%CAR_PAINT.length];const L=4.3,W=1.8;const sx=alongX?L:W,sz=alongX?W:L;
   bx(B,x,0.72,z,sx,0.72,sz,body,0,0,false);bx(B,x+(alongX?-0.2:0),1.37,z+(alongX?0:-0.2),alongX?2.3:1.6,0.58,alongX?1.6:2.3,burnt?M.burnt:M.glass,0,0,false);
   for(const a of [-1,1])for(const b of [-1,1]){const g=new THREE.CylinderGeometry(0.33,0.33,0.24,12);if(alongX)g.rotateX(Math.PI/2);else g.rotateZ(Math.PI/2);g.translate(x+(alongX?a*1.35:b*0.82),0.33,z+(alongX?b*0.82:a*1.35));B.add(g,burnt?M.rust:M.tire);}
   addCollider(x-sx/2,0,z-sz/2,x+sx/2,1.08,z+sz/2);addCollider(x-(alongX?1.15:0.8),1.08,z-(alongX?0.8:1.15),x+(alongX?1.15:0.8),1.66,z+(alongX?0.8:1.15));}
@@ -215,8 +218,10 @@ function buildDark(){
 }
 
 function buildMap(){clearMap();if(SET.map==='dark')buildDark();else buildLux();}
-function spawnPoint(near,rmin,rmax,sameLevel){
+function spawnPoint(near,rmin,rmax,sameLevel,hidden){
   for(let i=0;i<60;i++){const a=Math.random()*Math.PI*2,d=rnd(rmin,rmax);const x=near.x+Math.sin(a)*d,z=near.z+Math.cos(a)*d;const bnd=MAP.bounds;
+    // appear where the camera is not looking (nobody pops into view)
+    if(hidden&&typeof camDir!=='undefined'&&i<45){const vx=x-camera.position.x,vz=z-camera.position.z,vl=Math.hypot(vx,vz)||1;if((vx*camDir.x+vz*camDir.z)/(vl*Math.hypot(camDir.x,camDir.z)||1)>0.2)continue;}
     if(x<bnd[0]||x>bnd[2]||z<bnd[1]||z>bnd[3])continue;
     const gy=groundAt(x,z,60);if(insideBox(x,gy+0.6,z,0.5))continue;if(gy-terrainH(x,z)>0.6)continue;
     if(sameLevel!==false&&Math.abs(gy-groundAt(near.x,near.z,near.y!==undefined?near.y:60))>2.5)continue;

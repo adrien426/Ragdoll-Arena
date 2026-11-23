@@ -7,7 +7,7 @@ const $=id=>document.getElementById(id);
 const hud=$('hud'),hx=hud.getContext('2d');let HW=0,HH=0,HD=1;
 function resize(){HD=Math.min(2,window.devicePixelRatio||1);HW=innerWidth;HH=innerHeight;hud.width=HW*HD;hud.height=HH*HD;renderer.setSize(HW,HH,false);camera.aspect=HW/HH;camera.updateProjectionMatrix();if(inspTarget)drawInspect();}
 addEventListener('resize',resize);
-let paused=false,camYaw=0,camPitch=-0.12,camDir={x:0,y:0,z:1},aimTarget=null,msgT=0,physAcc=0,hbT=0,fxT=0,lampT=0;
+let camAim=0;let paused=false,camYaw=0,camPitch=-0.12,camDir={x:0,y:0,z:1},aimTarget=null,msgT=0,physAcc=0,hbT=0,fxT=0,lampT=0;
 const popups=[],FEED=[],SPEECH=[];
 function speechAt(c,text){for(let i=SPEECH.length-1;i>=0;i--)if(SPEECH[i].c===c)SPEECH.splice(i,1);SPEECH.push({c,text,t:3.2});if(SPEECH.length>8)SPEECH.shift();}
 
@@ -21,9 +21,11 @@ function addFeed(t,sev){FEED.push({t:t+(t.startsWith('💀')?'':tipFor(t)),sev,t
 function reportInjuries(c,inj,point){
   if(!inj||!inj.length)return;
   if(!c.isPlayer&&c.alive&&c.conscious&&inj.some(x=>x.sev>=2)&&Math.random()<0.6)say(c,'hurt');
-  const sorted=inj.slice().sort((a,b)=>b.sev-a.sev);
-  if(SET.injuryText&&(c.isPlayer||hdist(c.P[c.pelvis],camera.position)<45)){for(let i=popups.length-1;i>=0;i--)if(popups[i].owner===c&&popups[i].max-popups[i].t<1.2)popups.splice(i,1);const anchor=c.P[c.head];sorted.slice(0,3).forEach((it,i)=>popupAt(add(anchor,{x:0,y:0.15,z:0}),it.t,SEV_TXT[clamp(it.sev,0,4)],2.4,2-i,c));}
+  {const seen=new Set();inj=inj.filter(x=>{if(seen.has(x.t))return false;seen.add(x.t);return true;});}
+  const hdr=inj.filter(x=>x.hdr),rest=inj.filter(x=>!x.hdr).sort((a,b)=>b.sev-a.sev);const sorted=hdr.concat(rest);
+  if(SET.injuryText&&(c.isPlayer||hdist(c.P[c.pelvis],camera.position)<45)){for(let i=popups.length-1;i>=0;i--)if(popups[i].owner===c&&popups[i].max-popups[i].t<1.2)popups.splice(i,1);const anchor=c.P[c.head];sorted.slice(0,hdr.length?4:3).forEach((it,i)=>popupAt(add(anchor,{x:0,y:0.15,z:0}),it.t,SEV_TXT[clamp(it.sev,0,4)],2.4,2-i,c));}
   if(c.isPlayer)for(const it of sorted.slice(0,4))addFeed(it.t,it.sev);
+  else if(c.lastHit===player&&hdr.length&&rest.length)addFeed(hdr[0].t+' : '+rest.slice(0,2).map(x=>x.t).join(' · '),Math.max(...rest.map(x=>x.sev)));
 }
 
 /* ---------------- input ---------------- */
@@ -81,7 +83,7 @@ function tapInspect(sx,sy){
 function inspectAim(){if(!player)return;if(aimTarget&&aimTarget.c){openInspect(aimTarget.c);return;}let best=null,bd=6;for(const c of chars){if(c===player)continue;const d=vlen(sub(c.P[c.pelvis],player.P[player.pelvis]));if(d<bd){bd=d;best=c;}}openInspect(best||player);}
 
 /* ---------------- weapons bar ---------------- */
-const wbar=$('weapons');const WSHORT=['Poings','Couteau','Batte','Taser','Pistolet','Katana','Pompe','Molotov','Fusil AR','Sniper','Brique','Grenade'];
+const wbar=$('weapons');const WSHORT=['Poings','Couteau','Batte','Taser','Pistolet','Katana','Pompe','Molotov','Fusil AR','Sniper','Brique','Grenade','Machette','Hache','Marteau','Pied-biche'];
 function buildWeaponBar(){wbar.innerHTML='';WEAPONS.forEach((w,i)=>{const d=document.createElement('div');const lk=!weaponUnlocked(i);d.className='w'+(player&&player.weapon===i?' sel':'')+(lk?' lock':'');d.innerHTML='<b>'+(lk?'🔒':w.icon)+'</b>'+(lk?w.unlock+' kills':WSHORT[i]);d.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();initAudio();selectWeapon(i);});wbar.appendChild(d);});}
 function selectWeapon(i){if(!player||i<0||i>=WEAPONS.length||!weaponUnlocked(i))return;player.weapon=i;player.swing=-1;player.cd=0.25;player.reloadT=0;buildWeaponBar();}
 
@@ -90,8 +92,9 @@ function updateCamera(){
   const p=player;camDir={x:Math.sin(camYaw)*Math.cos(camPitch),y:Math.sin(camPitch),z:Math.cos(camYaw)*Math.cos(camPitch)};
   const R={x:-Math.cos(camYaw),y:0,z:Math.sin(camYaw)};
   const ch=p.P[p.chest],nk=p.P[p.neck];const awake=p.alive&&p.conscious;
-  let tgt=awake?add(add(lerp3(ch,nk,0.6),mul(R,0.42)),{x:0,y:0.22,z:0}):add(ch,{x:0,y:0.7,z:0});
-  const back=mul(camDir,-1);let dist=awake?2.4:3.8;
+  const aimC=awake&&p._aimT>GT;camAim+=((aimC?1:0)-camAim)*0.12;   // over-the-shoulder zoom while firing
+  let tgt=awake?add(add(lerp3(ch,nk,0.6),mul(R,0.52+camAim*0.2)),{x:0,y:0.22,z:0}):add(ch,{x:0,y:0.7,z:0});
+  const back=mul(camDir,-1);let dist=awake?2.4-camAim*0.6:3.8;
   for(const b of boxesNear(tgt.x,tgt.z,5)){const d=rayBox(tgt,back,b);if(d!==null&&d<dist)dist=Math.max(0.3,d-0.15);}
   const td=rayTerrain(tgt,back,dist);if(td!==null)dist=Math.max(0.3,td-0.2);
   const pos=add(tgt,mul(back,dist));const th=terrainH(pos.x,pos.z);if(pos.y<th+0.2)pos.y=th+0.2;
@@ -156,7 +159,7 @@ function drawHUD(dt){
   // crosshair
   const cx=HW/2,cy=HH/2,w=WEAPONS[p.weapon];
   if(p.alive&&p.conscious){const gap=(w.type==='gun'?6+w.spread*120:5)+p.aimWob*160;hx.strokeStyle=aimTarget?'#ff4040':'rgba(255,255,255,.85)';hx.lineWidth=2;hx.beginPath();hx.moveTo(cx-gap-7,cy);hx.lineTo(cx-gap,cy);hx.moveTo(cx+gap,cy);hx.lineTo(cx+gap+7,cy);hx.moveTo(cx,cy-gap-7);hx.lineTo(cx,cy-gap);hx.moveTo(cx,cy+gap);hx.lineTo(cx,cy+gap+7);hx.stroke();
-    if(aimTarget){const t=aimTarget.c,h=t.H[aimTarget.hi];const reg=(h.split!==undefined&&aimTarget.t>h.split)?h.reg2:h.reg;hx.fillStyle='#fff';hx.font='bold 11px sans-serif';hx.fillText((t===p?'':t.name+' — ')+REGIONS[reg].n+' · '+vlen(sub(t.P[t.pelvis],p.P[p.pelvis])).toFixed(0)+' m',cx,cy+30);}
+    if(aimTarget){const t=aimTarget.c,h=t.H[aimTarget.hi];const reg=(h.split!==undefined&&aimTarget.t>h.split)?h.reg2:h.reg;hx.fillStyle='#fff';hx.font='bold 11px sans-serif';let zn=REGIONS[reg].n;try{zn=hitZone(t,reg,aimTarget.point).n;}catch(e){}hx.fillText((t===p?'':t.name+' — ')+zn+' · '+vlen(sub(t.P[t.pelvis],p.P[p.pelvis])).toFixed(0)+' m',cx,cy+30);}
     if(hitMarker>0){hx.strokeStyle='#fff';hx.lineWidth=2;hx.beginPath();for(const [a,b] of [[-1,-1],[1,-1],[-1,1],[1,1]]){hx.moveTo(cx+a*6,cy+b*6);hx.lineTo(cx+a*12,cy+b*12);}hx.stroke();}}
   hx.textAlign='left';
   // vitals panel
@@ -464,7 +467,7 @@ function step(dt){
   for(const e of chars)if(e!==player)aiTick(e,dt);
   for(const c of chars){physics(c);control(c,dt);attackLogic(c,dt);burnTick(c,dt);}
   separate();updProjectiles(dt);updFires(dt);updEvents(dt);
-  for(const c of chars)if(c.skin)animStep(c,dt);
+  for(const c of chars){if(c.skin)animStep(c,dt);bloodTick(c,dt);}
   physAcc+=dt;if(physAcc>=0.05){for(const c of chars){physiology(c,physAcc);speakTick(c);}physAcc=0;}
   progT-=dt;if(progT<=0){progT=0.5;for(const c of chars){c._prog=prognosis(c);c._ps=survival(c).ps;c._ps0=noCare(c,c._prog,c._ps);}}
   updParticles(dt);updSprites(dt);updLines(dt);
@@ -497,6 +500,10 @@ function loop(t){
 resize();
 buildMap();applyEnvironment();
 player=makeChar(MAP.spawn.x,MAP.spawn.z,MAP.yaw,0,{name:'Vous',allWeapons:true,weapon:4,shirt:'#2f55a3',skin:'#e3b48c'});chars.push(player);camYaw=MAP.yaw;
-$('loadMsg').style.display='none';$('start').classList.remove('hidden');$('startSet').classList.remove('hidden');
-loadModels();
+// wait for the 3D library (characters, animations, cars, firearms) so the game never starts with placeholders
+(function waitAssets(){const t0=performance.now();const tick=()=>{const done=MODELS.done+PROPS.done,tot=(MODELS.total||8)+(PROPS.total||7);
+  const ok=MODELS.finished&&PROPS.finished,late=performance.now()-t0>30000;
+  if(!ok&&!late){$('loadMsg').textContent='Chargement des personnages, voitures et armes 3D… '+Math.round(done/tot*100)+' %';setTimeout(tick,150);return;}
+  $('loadMsg').style.display='none';$('start').classList.remove('hidden');$('startSet').classList.remove('hidden');};tick();})();
+loadModels();loadProps();
 requestAnimationFrame(loop);
